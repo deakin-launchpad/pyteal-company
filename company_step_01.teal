@@ -1,0 +1,165 @@
+#pragma version 5
+txn ApplicationID
+int 0
+==
+bnz main_l17
+txn OnCompletion
+int DeleteApplication
+==
+bnz main_l16
+txn OnCompletion
+int UpdateApplication
+==
+bnz main_l15
+txn OnCompletion
+int OptIn
+==
+bnz main_l14
+txn OnCompletion
+int CloseOut
+==
+bnz main_l13
+txn OnCompletion
+int NoOp
+==
+bnz main_l7
+err
+main_l7:
+txna ApplicationArgs 0
+byte "crypto"
+==
+bnz main_l12
+txna ApplicationArgs 0
+byte "share"
+==
+bnz main_l10
+err
+main_l10:
+callsub sub3
+main_l11:
+int 0
+return
+main_l12:
+callsub sub2
+b main_l11
+main_l13:
+int 0
+return
+main_l14:
+int 0
+return
+main_l15:
+int 0
+return
+main_l16:
+int 0
+return
+main_l17:
+callsub sub0
+int 1
+return
+sub0: // on_create
+byte "company_name"
+byte "Test01"
+app_global_put
+byte "minted"
+int 0
+app_global_put
+byte "shared"
+int 0
+app_global_put
+byte "crypto_id"
+int 0
+app_global_put
+byte "crypto_base"
+int 0
+app_global_put
+byte "shares_id"
+int 0
+app_global_put
+retsub
+sub1: // create_tokens
+itxn_begin
+int acfg
+itxn_field TypeEnum
+txna ApplicationArgs 1
+itxn_field ConfigAssetName
+txna ApplicationArgs 2
+itxn_field ConfigAssetUnitName
+txna ApplicationArgs 3
+btoi
+itxn_field ConfigAssetTotal
+txna ApplicationArgs 4
+btoi
+itxn_field ConfigAssetDecimals
+txna ApplicationArgs 5
+btoi
+itxn_field ConfigAssetDefaultFrozen
+itxn_submit
+retsub
+sub2: // mint_crypto
+global GroupSize
+int 1
+==
+txn GroupIndex
+int 0
+==
+&&
+assert
+gtxn 0 RekeyTo
+global ZeroAddress
+==
+assert
+byte "minted"
+app_global_get
+int 0
+==
+txn NumAppArgs
+int 7
+==
+&&
+assert
+callsub sub1
+byte "crypto_id"
+itxn CreatedAssetID
+app_global_put
+byte "crypto_base"
+txna ApplicationArgs 6
+btoi
+app_global_put
+byte "minted"
+int 1
+app_global_put
+int 1
+return
+sub3: // mint_shares
+global GroupSize
+int 1
+==
+txn GroupIndex
+int 0
+==
+&&
+assert
+gtxn 0 RekeyTo
+global ZeroAddress
+==
+assert
+byte "shared"
+app_global_get
+int 0
+==
+txn NumAppArgs
+int 6
+==
+&&
+assert
+callsub sub1
+byte "shares_id"
+itxn CreatedAssetID
+app_global_put
+byte "shared"
+int 1
+app_global_put
+int 1
+return
