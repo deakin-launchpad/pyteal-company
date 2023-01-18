@@ -26,11 +26,11 @@ bnz main_l7
 err
 main_l7:
 txna ApplicationArgs 0
-byte "crypto"
+byte "mint_coins"
 ==
 bnz main_l12
 txna ApplicationArgs 0
-byte "share"
+byte "mint_Shares"
 ==
 bnz main_l10
 err
@@ -68,10 +68,7 @@ app_global_put
 byte "shared"
 int 0
 app_global_put
-byte "crypto_id"
-int 0
-app_global_put
-byte "crypto_base"
+byte "coins_id"
 int 0
 app_global_put
 byte "shares_id"
@@ -79,25 +76,49 @@ int 0
 app_global_put
 retsub
 sub1: // create_tokens
+store 5
+store 4
+store 3
+store 2
+store 1
+store 0
 itxn_begin
+load 5
+int 1
+==
+bnz sub1_l2
 int acfg
 itxn_field TypeEnum
-txna ApplicationArgs 1
+load 0
 itxn_field ConfigAssetName
-txna ApplicationArgs 2
+load 1
 itxn_field ConfigAssetUnitName
-txna ApplicationArgs 3
-btoi
+load 2
 itxn_field ConfigAssetTotal
-txna ApplicationArgs 4
-btoi
+load 3
 itxn_field ConfigAssetDecimals
-txna ApplicationArgs 5
-btoi
+load 4
 itxn_field ConfigAssetDefaultFrozen
+b sub1_l3
+sub1_l2:
+int acfg
+itxn_field TypeEnum
+load 0
+itxn_field ConfigAssetName
+load 1
+itxn_field ConfigAssetUnitName
+load 2
+itxn_field ConfigAssetTotal
+load 3
+itxn_field ConfigAssetDecimals
+load 4
+itxn_field ConfigAssetDefaultFrozen
+txna Accounts 1
+itxn_field ConfigAssetReserve
+sub1_l3:
 itxn_submit
 retsub
-sub2: // mint_crypto
+sub2: // mint_coins
 global GroupSize
 int 1
 ==
@@ -115,17 +136,22 @@ app_global_get
 int 0
 ==
 txn NumAppArgs
-int 7
+int 6
 ==
 &&
 assert
-callsub sub1
-byte "crypto_id"
-itxn CreatedAssetID
-app_global_put
-byte "crypto_base"
-txna ApplicationArgs 6
+txna ApplicationArgs 1
+txna ApplicationArgs 2
+txna ApplicationArgs 3
 btoi
+txna ApplicationArgs 4
+btoi
+txna ApplicationArgs 5
+btoi
+int 1
+callsub sub1
+byte "coins_id"
+itxn CreatedAssetID
 app_global_put
 byte "minted"
 int 1
@@ -154,6 +180,15 @@ int 6
 ==
 &&
 assert
+txna ApplicationArgs 1
+txna ApplicationArgs 2
+txna ApplicationArgs 3
+btoi
+txna ApplicationArgs 4
+btoi
+txna ApplicationArgs 5
+btoi
+int 0
 callsub sub1
 byte "shares_id"
 itxn CreatedAssetID
