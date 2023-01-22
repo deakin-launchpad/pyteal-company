@@ -1,0 +1,15 @@
+#pragma version 5
+txn TypeEnum
+int axfer
+==
+txn AssetReceiver
+txn Sender
+==
+&&
+txn AssetAmount
+int 0
+==
+&&
+assert
+int 1
+return
