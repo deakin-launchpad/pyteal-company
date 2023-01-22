@@ -7,27 +7,37 @@ def approval():
 
     # company name
     company_name = Bytes("Test01")
+    founder_name = Bytes("founder_address")
+
 
     # company key information
     company_name_key = Bytes("company_name")  # byteslice
+    founder_name_key = Bytes("founder") # byteslice
     minted_indicator_key = Bytes("minted")  # uint64
     shared_indicator_key = Bytes("shared")  # uint64
     coins_key = Bytes("coins_id")  # uint64
     shares_key = Bytes("shares_id")  # uint64
+    director_A_key = Bytes("directorA") # byteslice
+    director_B_key = Bytes("directorB") # byteslice
+    director_C_key = Bytes("directorC") # byteslice
 
     # operation
     op_mint_coins = Bytes("mint_coins")
-    op_mint_shares = Bytes("mint_Shares")
+    op_mint_shares = Bytes("mint_shares")
 
     # initial company
     @Subroutine(TealType.none)
     def on_create():
         return Seq(
             App.globalPut(company_name_key, company_name),
+            App.globalPut(founder_name_key, founder_name),
             App.globalPut(minted_indicator_key, Int(0)),
             App.globalPut(shared_indicator_key, Int(0)),
             App.globalPut(coins_key, Int(0)),
             App.globalPut(shares_key, Int(0)),
+            App.globalPut(director_A_key, Bytes("")),
+            App.globalPut(director_B_key, Bytes("")),
+            App.globalPut(director_C_key, Bytes("")),
         )
 
     # create assets (coins or shares)

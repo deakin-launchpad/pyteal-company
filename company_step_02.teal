@@ -2,23 +2,23 @@
 txn ApplicationID
 int 0
 ==
-bnz main_l17
+bnz main_l19
 txn OnCompletion
 int DeleteApplication
 ==
-bnz main_l16
+bnz main_l18
 txn OnCompletion
 int UpdateApplication
 ==
-bnz main_l15
+bnz main_l17
 txn OnCompletion
 int OptIn
 ==
-bnz main_l14
+bnz main_l16
 txn OnCompletion
 int CloseOut
 ==
-bnz main_l13
+bnz main_l15
 txn OnCompletion
 int NoOp
 ==
@@ -28,26 +28,27 @@ main_l7:
 txna ApplicationArgs 0
 byte "mint_coins"
 ==
-bnz main_l12
+bnz main_l14
 txna ApplicationArgs 0
-byte "mint_shares"
+byte "mint_Shares"
 ==
-bnz main_l10
+bnz main_l13
+txna ApplicationArgs 0
+byte "send_coins"
+==
+bnz main_l11
 err
-main_l10:
-callsub sub3
 main_l11:
-int 0
-return
+callsub sub6
 main_l12:
-callsub sub2
-b main_l11
+int 0
+return
 main_l13:
-int 0
-return
+callsub sub3
+b main_l12
 main_l14:
-int 0
-return
+callsub sub2
+b main_l12
 main_l15:
 int 0
 return
@@ -55,15 +56,18 @@ main_l16:
 int 0
 return
 main_l17:
+int 0
+return
+main_l18:
+int 0
+return
+main_l19:
 callsub sub0
 int 1
 return
 sub0: // on_create
 byte "company_name"
 byte "Test01"
-app_global_put
-byte "founder"
-byte "founder_address"
 app_global_put
 byte "minted"
 int 0
@@ -76,15 +80,6 @@ int 0
 app_global_put
 byte "shares_id"
 int 0
-app_global_put
-byte "directorA"
-byte ""
-app_global_put
-byte "directorB"
-byte ""
-app_global_put
-byte "directorC"
-byte ""
 app_global_put
 retsub
 sub1: // create_tokens
@@ -208,5 +203,95 @@ app_global_put
 byte "shared"
 int 1
 app_global_put
+int 1
+return
+sub4: // company_send_tokens
+store 10
+store 9
+store 8
+itxn_begin
+int axfer
+itxn_field TypeEnum
+load 8
+itxn_field XferAsset
+load 10
+itxn_field AssetReceiver
+load 9
+itxn_field AssetAmount
+itxn_submit
+retsub
+sub5: // check_assets_holding
+store 13
+store 12
+store 11
+load 12
+load 13
+asset_holding_get AssetBalance
+store 14
+store 15
+load 11
+byte "sender"
+==
+bnz sub5_l4
+load 11
+byte "receiver"
+==
+bnz sub5_l3
+err
+sub5_l3:
+load 14
+b sub5_l5
+sub5_l4:
+load 15
+sub5_l5:
+retsub
+sub6: // send_coins
+global GroupSize
+int 1
+==
+txn GroupIndex
+int 0
+==
+&&
+assert
+gtxn 0 RekeyTo
+global ZeroAddress
+==
+assert
+byte "coins_id"
+app_global_get
+store 6
+txna ApplicationArgs 1
+btoi
+store 7
+byte "minted"
+app_global_get
+int 1
+==
+byte "sender"
+txna Accounts 1
+txna Assets 0
+callsub sub5
+load 7
+>=
+&&
+byte "receiver"
+txna Accounts 2
+txna Assets 0
+callsub sub5
+&&
+txn NumAppArgs
+int 2
+==
+&&
+txn NumAccounts
+int 2
+==
+&&
+assert
+load 6
+load 7
+txna Accounts 2
+callsub sub4
 int 1
 return

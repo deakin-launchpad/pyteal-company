@@ -20,6 +20,10 @@ def approval():
     op_mint_shares = Bytes("mint_Shares")
     op_send_coins = Bytes("send_coins")
 
+    # Exp
+    sender = Bytes("sender")
+    receiver = Bytes("receiver")
+
     # initialize company
     @Subroutine(TealType.none)
     def on_create():
@@ -125,7 +129,7 @@ def approval():
 
     # send assets
     @Subroutine(TealType.none)
-    def send_tokens(asset_id, amount):
+    def company_send_tokens(asset_id, amount, receiver):
         return Seq(
             InnerTxnBuilder.Begin(),
             # create an asset that needs a reserve account
@@ -133,26 +137,38 @@ def approval():
                 {
                     TxnField.type_enum: TxnType.AssetTransfer,
                     TxnField.xfer_asset: asset_id,
-                    TxnField.asset_receiver: Txn.accounts[1],
+                    TxnField.asset_receiver: receiver,
                     TxnField.asset_amount: amount,
                 }
             ),
             InnerTxnBuilder.Submit(),
+
         )
 
     # check assets holding information
-    @Subroutine(TealType.anytype)
-    def check_assets_amount(asset_id):
-        return Return(
-            AssetHolding.balance(
-                Txn.sender(), Txn.assets[0]).value()
+    @Subroutine(TealType.uint64)
+    def check_assets_holding(role, accountAddr, asset_id):
+        accountAssetBalance = AssetHolding.balance(accountAddr, asset_id)
+        return Seq(
+            accountAssetBalance,
+            Return(
+                Cond(
+                    [role == Bytes("sender"), accountAssetBalance.value()],
+                    [role == Bytes("receiver"),
+                     accountAssetBalance.hasValue()],
+                )
             )
+        )
 
-    # Send to reserve account
+  # Send to reserve account
     @Subroutine(TealType.none)
     def send_coins():
-        # to store coins id
+        # Scratch variable to store coins id
         coins_id = ScratchVar(TealType.uint64)
+        # Scratch variable to store coins amount
+        coins_amount = ScratchVar(TealType.uint64)
+        # Scratch variable to represent receiver
+        coins_receiver = ScratchVar(TealType.bytes)
         return Seq(
             # basic sanity checks
             program.check_self(
@@ -162,18 +178,36 @@ def approval():
             program.check_rekey_zero(1),
             # get asset ID of coins
             coins_id.store(App.globalGet(coins_key)),
+            # get asset number to send
+            coins_amount.store(Btoi(Txn.application_args[1])),
+            # get receiver address
+            # coins_receiver.store(Txn.accounts[1]),
             Assert(
                 And(
                     # make sure the company has created coins
                     App.globalGet(minted_indicator_key) == Int(1),
+                    # Txn.assets[0] == coins_id.load(),
                     # make sure the company own enough coins
-                    check_assets_amount(
-                        coins_id.load()) >= Btoi(Txn.application_args[1]),
+                    # check_assets_holding(sender, Global.current_application_address(
+                    # ), coins_id.load()) >= coins_amount.load(),
+                    # check_assets_holding(sender, Global.current_application_address(
+                    # ), Txn.assets[0]) >= coins_amount.load(),
+                    check_assets_holding(sender, Txn.accounts[1], Txn.assets[0]) >= coins_amount.load(),
+                    # check optin of receiver
+                    # check_assets_holding(
+                    #     receiver, coins_receiver.load(), coins_id.load()),
+                    # check_assets_holding(
+                    #     receiver, coins_receiver.load(), Txn.assets[0]),
+                    check_assets_holding(
+                        receiver, Txn.accounts[2], Txn.assets[0]),
                     # operation, amount of coins
                     Txn.application_args.length() == Int(2),
+                    # application call account, receiver account
+                    Txn.accounts.length() == Int(2),
                 )
             ),
-            send_tokens(coins_id.load(), Txn.application_args[1]),
+            company_send_tokens(
+                coins_id.load(), coins_amount.load(), Txn.accounts[2]),
             Approve(),
         )
 
