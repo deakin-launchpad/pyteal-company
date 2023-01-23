@@ -11,26 +11,72 @@ def approval():
     shared_indicator_key = Bytes("shared")  # uint64
     coins_key = Bytes("coins_id")  # uint64
     shares_key = Bytes("shares_id")  # uint64
-    founder_key = Bytes("founderX") # uint64
+    founder_key = Bytes("founder")  # byteslice
 
     # operation
     op_mint_coins = Bytes("mint_coins")
     op_mint_shares = Bytes("mint_shares")
 
+    @Subroutine(TealType.bytes)
+    def convert_uint_to_bytes(arg):
+
+        string = ScratchVar(TealType.bytes)
+        num = ScratchVar(TealType.uint64)
+        digit = ScratchVar(TealType.uint64)
+
+        return If(
+            arg == Int(0),
+            Bytes("0"),
+            Seq([
+                string.store(Bytes("")),
+                For(num.store(arg), num.load() > Int(0), num.store(num.load() / Int(10))).Do(
+                    Seq([
+                        digit.store(num.load() % Int(10)),
+                        string.store(
+                            Concat(
+                                Substring(
+                                    Bytes('0123456789'),
+                                    digit.load(),
+                                    digit.load() + Int(1)
+                                ),
+                                string.load()
+                            )
+                        )
+                    ])
+
+                ),
+                string.load()
+            ])
+        )
     # initialize company
+    # @Subroutine(TealType.none)
+    # def on_create():
+    #     i = ScratchVar(TealType.uint64)
+    #     index = ScratchVar(TealType.uint64)
+    #     return Seq(
+    #         App.globalPut(company_name_key, Txn.application_args[0]),
+    #         App.globalPut(minted_indicator_key, Int(0)),
+    #         App.globalPut(shared_indicator_key, Int(0)),
+    #         App.globalPut(coins_key, Int(0)),
+    #         App.globalPut(shares_key, Int(0)),
+    #         index.store(Int(65)),
+    #         For(i.store(Int(0)), i.load()<(Txn.application_args.length() - Int(1)), i.store(i.load() + Int(1))).Do(
+    #             App.globalPut(SetByte(founder_key, Int(7), (index.load() + i.load())), Txn.application_args[(i.load() + Int(1))])
+    #         ),
+    #     )
+
     @Subroutine(TealType.none)
     def on_create():
         i = ScratchVar(TealType.uint64)
-        index = ScratchVar(TealType.uint64)
         return Seq(
             App.globalPut(company_name_key, Txn.application_args[0]),
             App.globalPut(minted_indicator_key, Int(0)),
             App.globalPut(shared_indicator_key, Int(0)),
             App.globalPut(coins_key, Int(0)),
             App.globalPut(shares_key, Int(0)),
-            index.store(Int(65)),
-            For(i.store(Int(0)), i.load()<(Txn.application_args.length() - Int(1)), i.store(i.load() + Int(1))).Do(
-                App.globalPut(SetByte(founder_key, Int(7), (index.load() + i.load())), Txn.application_args[(i.load() + Int(1))])
+            For(i.store(Int(0)), i.load() < (Txn.application_args.length() - Int(1)), i.store(i.load() + Int(1))).Do(
+                App.globalPut(Concat(founder_key, convert_uint_to_bytes(i.load() + Int(1))),
+                              Txn.application_args[(i.load() + Int(1))])
             ),
         )
 
@@ -89,7 +135,8 @@ def approval():
                 )
             ),
             # mint coins
-            create_tokens(Txn.application_args[1],Txn.application_args[2],Btoi(Txn.application_args[3]),Btoi(Txn.application_args[4]),Btoi(Txn.application_args[5]),Int(1)),
+            create_tokens(Txn.application_args[1], Txn.application_args[2], Btoi(
+                Txn.application_args[3]), Btoi(Txn.application_args[4]), Btoi(Txn.application_args[5]), Int(1)),
             # coins id
             App.globalPut(coins_key, (InnerTxn.created_asset_id())),
             # coins minted
@@ -118,7 +165,8 @@ def approval():
                 )
             ),
             # mint shares
-            create_tokens(Txn.application_args[1],Txn.application_args[2],Btoi(Txn.application_args[3]),Btoi(Txn.application_args[4]),Btoi(Txn.application_args[5]), Int(0)),
+            create_tokens(Txn.application_args[1], Txn.application_args[2], Btoi(
+                Txn.application_args[3]), Btoi(Txn.application_args[4]), Btoi(Txn.application_args[5]), Int(0)),
             # shares id
             App.globalPut(shares_key, InnerTxn.created_asset_id()),
             # shares minted
