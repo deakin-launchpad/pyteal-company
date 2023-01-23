@@ -7,32 +7,31 @@ def approval():
 
     # company key information
     company_name_key = Bytes("company_name")  # byteslice
-    founder_name_key = Bytes("founder") # byteslice
     minted_indicator_key = Bytes("minted")  # uint64
     shared_indicator_key = Bytes("shared")  # uint64
     coins_key = Bytes("coins_id")  # uint64
     shares_key = Bytes("shares_id")  # uint64
-    director_A_key = Bytes("directorA") # byteslice
-    director_B_key = Bytes("directorB") # byteslice
-    director_C_key = Bytes("directorC") # byteslice
+    founder_key = Bytes("founderX") # uint64
 
     # operation
     op_mint_coins = Bytes("mint_coins")
     op_mint_shares = Bytes("mint_shares")
 
-    # initial company
+    # initialize company
     @Subroutine(TealType.none)
     def on_create():
+        i = ScratchVar(TealType.uint64)
+        index = ScratchVar(TealType.uint64)
         return Seq(
             App.globalPut(company_name_key, Txn.application_args[0]),
-            App.globalPut(founder_name_key, Txn.application_args[1]),
             App.globalPut(minted_indicator_key, Int(0)),
             App.globalPut(shared_indicator_key, Int(0)),
             App.globalPut(coins_key, Int(0)),
             App.globalPut(shares_key, Int(0)),
-            App.globalPut(director_A_key, Txn.application_args[1]),
-            App.globalPut(director_B_key, Txn.application_args[2]),
-            App.globalPut(director_C_key, Txn.application_args[3]),
+            index.store(Int(65)),
+            For(i.store(Int(0)), i.load()<(Txn.application_args.length() - Int(1)), i.store(i.load() + Int(1))).Do(
+                App.globalPut(SetByte(founder_key, Int(7), (index.load() + i.load())), Txn.application_args[(i.load() + Int(1))])
+            ),
         )
 
     # create assets (coins or shares)

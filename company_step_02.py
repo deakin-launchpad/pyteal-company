@@ -5,20 +5,13 @@ from pyteal_helpers import program
 
 def approval():
 
-    # company name
-    company_name = Bytes("Test01")
-    founder_name = Bytes("founder_address")
-
     # company key information
     company_name_key = Bytes("company_name")  # byteslice
-    founder_name_key = Bytes("founder") # byteslice
     minted_indicator_key = Bytes("minted")  # uint64
     shared_indicator_key = Bytes("shared")  # uint64
     coins_key = Bytes("coins_id")  # uint64
     shares_key = Bytes("shares_id")  # uint64
-    director_A_key = Bytes("directorA") # byteslice
-    director_B_key = Bytes("directorB") # byteslice
-    director_C_key = Bytes("directorC") # byteslice
+    founder_key = Bytes("founderX") # uint64
 
     # operation
     op_mint_coins = Bytes("mint_coins")
@@ -32,16 +25,18 @@ def approval():
     # initialize company
     @Subroutine(TealType.none)
     def on_create():
+        i = ScratchVar(TealType.uint64)
+        index = ScratchVar(TealType.uint64)
         return Seq(
-            App.globalPut(company_name_key, company_name),
-            App.globalPut(founder_name_key, founder_name),
+            App.globalPut(company_name_key, Txn.application_args[0]),
             App.globalPut(minted_indicator_key, Int(0)),
             App.globalPut(shared_indicator_key, Int(0)),
             App.globalPut(coins_key, Int(0)),
             App.globalPut(shares_key, Int(0)),
-            App.globalPut(director_A_key, Bytes("")),
-            App.globalPut(director_B_key, Bytes("")),
-            App.globalPut(director_C_key, Bytes("")),
+            index.store(Int(65)),
+            For(i.store(Int(0)), i.load()<(Txn.application_args.length() - Int(1)), i.store(i.load() + Int(1))).Do(
+                App.globalPut(SetByte(founder_key, Int(7), (index.load() + i.load())), Txn.application_args[(i.load() + Int(1))])
+            ),
         )
 
     # create assets (coins or shares)
@@ -195,13 +190,13 @@ def approval():
                 And(
                     # make sure the company has created coins
                     App.globalGet(minted_indicator_key) == Int(1),
-                    # Txn.assets[0] == coins_id.load(),
+                    Txn.assets[0] == coins_id.load(),
                     # make sure the company own enough coins
                     # check_assets_holding(sender, Global.current_application_address(
                     # ), coins_id.load()) >= coins_amount.load(),
                     # check_assets_holding(sender, Global.current_application_address(
                     # ), Txn.assets[0]) >= coins_amount.load(),
-                    check_assets_holding(sender, Txn.accounts[1], Txn.assets[0]) >= coins_amount.load(),
+                    check_assets_holding(sender, Global.current_application_address(), coins_id.load()) >= coins_amount.load(),
                     # check optin of receiver
                     # check_assets_holding(
                     #     receiver, coins_receiver.load(), coins_id.load()),
@@ -212,11 +207,11 @@ def approval():
                     # operation, amount of coins
                     Txn.application_args.length() == Int(2),
                     # application call account, receiver account
-                    Txn.accounts.length() == Int(2),
+                    # Txn.accounts.length() == Int(3),
                 )
             ),
             company_send_tokens(
-                coins_id.load(), coins_amount.load(), Txn.accounts[2]),
+                coins_id.load(), coins_amount.load(), Txn.accounts[1]),
             Approve(),
         )
 

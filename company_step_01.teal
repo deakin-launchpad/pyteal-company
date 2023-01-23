@@ -62,9 +62,6 @@ sub0: // on_create
 byte "company_name"
 txna ApplicationArgs 0
 app_global_put
-byte "founder"
-txna ApplicationArgs 1
-app_global_put
 byte "minted"
 int 0
 app_global_put
@@ -77,53 +74,72 @@ app_global_put
 byte "shares_id"
 int 0
 app_global_put
-byte "directorA"
-txna ApplicationArgs 1
+int 65
+store 1
+int 0
+store 0
+sub0_l1:
+load 0
+txn NumAppArgs
+int 1
+-
+<
+bz sub0_l3
+byte "founderX"
+int 7
+load 1
+load 0
++
+setbyte
+load 0
+int 1
++
+txnas ApplicationArgs
 app_global_put
-byte "directorB"
-txna ApplicationArgs 2
-app_global_put
-byte "directorC"
-txna ApplicationArgs 3
-app_global_put
+load 0
+int 1
++
+store 0
+b sub0_l1
+sub0_l3:
 retsub
 sub1: // create_tokens
+store 7
+store 6
 store 5
 store 4
 store 3
 store 2
-store 1
-store 0
 itxn_begin
-load 5
+load 7
 int 1
 ==
 bnz sub1_l2
 int acfg
 itxn_field TypeEnum
-load 0
-itxn_field ConfigAssetName
-load 1
-itxn_field ConfigAssetUnitName
 load 2
-itxn_field ConfigAssetTotal
+itxn_field ConfigAssetName
 load 3
-itxn_field ConfigAssetDecimals
+itxn_field ConfigAssetUnitName
 load 4
+itxn_field ConfigAssetTotal
+load 5
+itxn_field ConfigAssetDecimals
+load 6
 itxn_field ConfigAssetDefaultFrozen
 b sub1_l3
 sub1_l2:
 int acfg
 itxn_field TypeEnum
-load 0
-itxn_field ConfigAssetName
-load 1
-itxn_field ConfigAssetUnitName
 load 2
-itxn_field ConfigAssetTotal
+itxn_field ConfigAssetName
 load 3
-itxn_field ConfigAssetDecimals
+itxn_field ConfigAssetUnitName
 load 4
+itxn_field ConfigAssetTotal
+load 5
+itxn_field ConfigAssetDecimals
+load 6
 itxn_field ConfigAssetDefaultFrozen
 txna Accounts 1
 itxn_field ConfigAssetReserve
