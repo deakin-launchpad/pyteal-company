@@ -5,11 +5,6 @@ from pyteal_helpers import program
 
 def approval():
 
-    # company name
-    company_name = Bytes("Test01")
-    founder_name = Bytes("founder_address")
-
-
     # company key information
     company_name_key = Bytes("company_name")  # byteslice
     founder_name_key = Bytes("founder") # byteslice
@@ -29,15 +24,15 @@ def approval():
     @Subroutine(TealType.none)
     def on_create():
         return Seq(
-            App.globalPut(company_name_key, company_name),
-            App.globalPut(founder_name_key, founder_name),
+            App.globalPut(company_name_key, Txn.application_args[0]),
+            App.globalPut(founder_name_key, Txn.application_args[1]),
             App.globalPut(minted_indicator_key, Int(0)),
             App.globalPut(shared_indicator_key, Int(0)),
             App.globalPut(coins_key, Int(0)),
             App.globalPut(shares_key, Int(0)),
-            App.globalPut(director_A_key, Bytes("")),
-            App.globalPut(director_B_key, Bytes("")),
-            App.globalPut(director_C_key, Bytes("")),
+            App.globalPut(director_A_key, Txn.application_args[1]),
+            App.globalPut(director_B_key, Txn.application_args[2]),
+            App.globalPut(director_C_key, Txn.application_args[3]),
         )
 
     # create assets (coins or shares)
@@ -117,6 +112,8 @@ def approval():
                 And(
                     # make sure the company has not created shares
                     App.globalGet(shared_indicator_key) == Int(0),
+                    # shares name equals to company name
+                    Txn.application_args[1] == App.globalGet(company_name_key),
                     # operation, company name, shares unit name, shares amount including decimal numbers, shares decimal, default frozen
                     Txn.application_args.length() == Int(6),
                 )

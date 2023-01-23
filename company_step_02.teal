@@ -69,6 +69,9 @@ sub0: // on_create
 byte "company_name"
 byte "Test01"
 app_global_put
+byte "founder"
+byte "founder_address"
+app_global_put
 byte "minted"
 int 0
 app_global_put
@@ -80,6 +83,15 @@ int 0
 app_global_put
 byte "shares_id"
 int 0
+app_global_put
+byte "directorA"
+byte ""
+app_global_put
+byte "directorB"
+byte ""
+app_global_put
+byte "directorC"
+byte ""
 app_global_put
 retsub
 sub1: // create_tokens
@@ -274,11 +286,6 @@ txna Assets 0
 callsub sub5
 load 7
 >=
-&&
-byte "receiver"
-txna Accounts 2
-txna Assets 0
-callsub sub5
 &&
 txn NumAppArgs
 int 2

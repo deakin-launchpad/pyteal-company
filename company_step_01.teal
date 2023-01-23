@@ -60,10 +60,10 @@ int 1
 return
 sub0: // on_create
 byte "company_name"
-byte "Test01"
+txna ApplicationArgs 0
 app_global_put
 byte "founder"
-byte "founder_address"
+txna ApplicationArgs 1
 app_global_put
 byte "minted"
 int 0
@@ -78,13 +78,13 @@ byte "shares_id"
 int 0
 app_global_put
 byte "directorA"
-byte ""
+txna ApplicationArgs 1
 app_global_put
 byte "directorB"
-byte ""
+txna ApplicationArgs 2
 app_global_put
 byte "directorC"
-byte ""
+txna ApplicationArgs 3
 app_global_put
 retsub
 sub1: // create_tokens
@@ -187,6 +187,11 @@ byte "shared"
 app_global_get
 int 0
 ==
+txna ApplicationArgs 1
+byte "company_name"
+app_global_get
+==
+&&
 txn NumAppArgs
 int 6
 ==
