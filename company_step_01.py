@@ -11,7 +11,7 @@ def approval():
     shared_indicator_key = Bytes("shared")  # uint64
     coins_key = Bytes("coins_id")  # uint64
     shares_key = Bytes("shares_id")  # uint64
-    founder_key = Bytes("founder")  # byteslice
+    founder_key = Bytes("fonder")  # byteslice
 
     # operation
     op_mint_coins = Bytes("mint_coins")
@@ -49,22 +49,6 @@ def approval():
             ])
         )
     # initialize company
-    # @Subroutine(TealType.none)
-    # def on_create():
-    #     i = ScratchVar(TealType.uint64)
-    #     index = ScratchVar(TealType.uint64)
-    #     return Seq(
-    #         App.globalPut(company_name_key, Txn.application_args[0]),
-    #         App.globalPut(minted_indicator_key, Int(0)),
-    #         App.globalPut(shared_indicator_key, Int(0)),
-    #         App.globalPut(coins_key, Int(0)),
-    #         App.globalPut(shares_key, Int(0)),
-    #         index.store(Int(65)),
-    #         For(i.store(Int(0)), i.load()<(Txn.application_args.length() - Int(1)), i.store(i.load() + Int(1))).Do(
-    #             App.globalPut(SetByte(founder_key, Int(7), (index.load() + i.load())), Txn.application_args[(i.load() + Int(1))])
-    #         ),
-    #     )
-
     @Subroutine(TealType.none)
     def on_create():
         i = ScratchVar(TealType.uint64)
