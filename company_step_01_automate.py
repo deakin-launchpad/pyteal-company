@@ -11,8 +11,7 @@ def approval():
     shared_indicator_key = Bytes("shared")  # uint64
     coins_key = Bytes("coins_id")  # uint64
     shares_key = Bytes("shares_id")  # uint64
-    founder_key = Bytes("founder")  # byteslice
-    number_of_founders_key = Bytes("number_of_founder") # uint64
+    founder_key = Bytes("fonder")  # byteslice
 
     # operation
     op_mint_coins = Bytes("mint_coins")
@@ -49,25 +48,28 @@ def approval():
                 string.load()
             ])
         )
-
+        
     # initialize company
     @Subroutine(TealType.none)
     def on_create():
         i = ScratchVar(TealType.uint64)
         return Seq(
-            Assert(
-                Txn.application_args.length() == Int(1)
-            ),  
+            # basic sanity checks
+            program.check_self(
+                group_size=Int(1),
+                group_index=Int(0),
+            ),
+            program.check_rekey_zero(3),
             App.globalPut(company_name_key, Txn.application_args[0]),
             App.globalPut(minted_indicator_key, Int(0)),
             App.globalPut(shared_indicator_key, Int(0)),
             App.globalPut(coins_key, Int(0)),
             App.globalPut(shares_key, Int(0)),
-            For(i.store(Int(1)), i.load() < (Txn.accounts.length() + Int(1)), i.store(i.load() + Int(1))).Do(
-                App.globalPut(Concat(founder_key, convert_uint_to_bytes(i.load())),
-                              Txn.accounts[(i.load())])
+            For(i.store(Int(0)), i.load() < (Txn.application_args.length() - Int(1)), i.store(i.load() + Int(1))).Do(
+                App.globalPut(Concat(founder_key, convert_uint_to_bytes(i.load() + Int(1))),
+                              Txn.application_args[(i.load() + Int(1))])
             ),
-            App.globalPut(number_of_founders_key, (i.load() - Int(1))),
+            
         )
 
     # create assets (coins or shares)
@@ -115,7 +117,7 @@ def approval():
                 group_size=Int(1),
                 group_index=Int(0),
             ),
-            program.check_rekey_zero(Int(1)),
+            program.check_rekey_zero(1),
             Assert(
                 And(
                     # make sure the company has not created any crypto
@@ -143,7 +145,7 @@ def approval():
                 group_size=Int(1),
                 group_index=Int(0),
             ),
-            program.check_rekey_zero(Int(1)),
+            program.check_rekey_zero(1),
             Assert(
                 And(
                     # make sure the company has not created shares

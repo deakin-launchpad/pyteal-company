@@ -25,16 +25,24 @@ def event(
     )
 
 
+# def check_rekey_zero(
+#     num_transactions: int,
+# ):
+#     return Assert(
+#         And(
+#             *[
+#                 Gtxn[i].rekey_to() == Global.zero_address()
+#                 for i in range(num_transactions)
+#             ]
+#         )
+#     )
+
 def check_rekey_zero(
-    num_transactions: int,
+    num_transactions,
 ):
-    return Assert(
-        And(
-            *[
-                Gtxn[i].rekey_to() == Global.zero_address()
-                for i in range(num_transactions)
-            ]
-        )
+    i = ScratchVar(TealType.uint64)
+    return For(i.store(Int(0)), i.load() < num_transactions, i.store(i.load() + Int(1))).Do(
+        Assert(Gtxn[i.load()].rekey_to() == Global.zero_address()),
     )
 
 

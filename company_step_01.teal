@@ -99,6 +99,10 @@ byte "0"
 sub0_l6:
 retsub
 sub1: // on_create
+txn NumAppArgs
+int 1
+==
+assert
 byte "company_name"
 txna ApplicationArgs 0
 app_global_put
@@ -114,25 +118,21 @@ app_global_put
 byte "shares_id"
 int 0
 app_global_put
-int 0
+int 1
 store 0
 sub1_l1:
 load 0
-txn NumAppArgs
+txn NumAccounts
 int 1
--
++
 <
 bz sub1_l3
 byte "founder"
 load 0
-int 1
-+
 callsub sub0
 concat
 load 0
-int 1
-+
-txnas ApplicationArgs
+txnas Accounts
 app_global_put
 load 0
 int 1
@@ -140,44 +140,49 @@ int 1
 store 0
 b sub1_l1
 sub1_l3:
+byte "number_of_founder"
+load 0
+int 1
+-
+app_global_put
 retsub
 sub2: // create_tokens
+store 11
 store 10
 store 9
 store 8
 store 7
 store 6
-store 5
 itxn_begin
-load 10
+load 11
 int 1
 ==
 bnz sub2_l2
 int acfg
 itxn_field TypeEnum
-load 5
-itxn_field ConfigAssetName
 load 6
-itxn_field ConfigAssetUnitName
+itxn_field ConfigAssetName
 load 7
-itxn_field ConfigAssetTotal
+itxn_field ConfigAssetUnitName
 load 8
-itxn_field ConfigAssetDecimals
+itxn_field ConfigAssetTotal
 load 9
+itxn_field ConfigAssetDecimals
+load 10
 itxn_field ConfigAssetDefaultFrozen
 b sub2_l3
 sub2_l2:
 int acfg
 itxn_field TypeEnum
-load 5
-itxn_field ConfigAssetName
 load 6
-itxn_field ConfigAssetUnitName
+itxn_field ConfigAssetName
 load 7
-itxn_field ConfigAssetTotal
+itxn_field ConfigAssetUnitName
 load 8
-itxn_field ConfigAssetDecimals
+itxn_field ConfigAssetTotal
 load 9
+itxn_field ConfigAssetDecimals
+load 10
 itxn_field ConfigAssetDefaultFrozen
 txna Accounts 1
 itxn_field ConfigAssetReserve
@@ -193,10 +198,24 @@ int 0
 ==
 &&
 assert
-gtxn 0 RekeyTo
+int 0
+store 5
+sub3_l1:
+load 5
+int 1
+<
+bz sub3_l3
+load 5
+gtxns RekeyTo
 global ZeroAddress
 ==
 assert
+load 5
+int 1
++
+store 5
+b sub3_l1
+sub3_l3:
 byte "minted"
 app_global_get
 int 0
@@ -233,10 +252,24 @@ int 0
 ==
 &&
 assert
-gtxn 0 RekeyTo
+int 0
+store 12
+sub4_l1:
+load 12
+int 1
+<
+bz sub4_l3
+load 12
+gtxns RekeyTo
 global ZeroAddress
 ==
 assert
+load 12
+int 1
++
+store 12
+b sub4_l1
+sub4_l3:
 byte "shared"
 app_global_get
 int 0
