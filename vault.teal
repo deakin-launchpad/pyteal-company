@@ -1,0 +1,202 @@
+#pragma version 8
+txn ApplicationID
+int 0
+==
+bnz main_l14
+txn OnCompletion
+int DeleteApplication
+==
+bnz main_l13
+txn OnCompletion
+int UpdateApplication
+==
+bnz main_l12
+txn OnCompletion
+int OptIn
+==
+bnz main_l11
+txn OnCompletion
+int CloseOut
+==
+bnz main_l10
+txn OnCompletion
+int NoOp
+==
+bnz main_l7
+err
+main_l7:
+txna ApplicationArgs 0
+byte "binding_request"
+==
+bnz main_l9
+err
+main_l9:
+callsub letcompanybindvault_3
+int 0
+return
+main_l10:
+int 0
+return
+main_l11:
+int 0
+return
+main_l12:
+int 0
+return
+main_l13:
+int 0
+return
+main_l14:
+callsub oncreate_1
+int 1
+return
+
+// get_global_value
+getglobalvalue_0:
+store 3
+store 2
+load 2
+load 3
+app_global_get_ex
+store 5
+store 4
+load 4
+retsub
+
+// on_create
+oncreate_1:
+global GroupSize
+int 1
+==
+txn GroupIndex
+int 0
+==
+&&
+assert
+txna Applications 0
+store 0
+txna Accounts 1
+store 1
+txn NumAppArgs
+int 1
+==
+load 0
+byte "company_wallet"
+callsub getglobalvalue_0
+load 1
+==
+&&
+load 0
+byte "vault_id"
+callsub getglobalvalue_0
+int 0
+==
+&&
+load 0
+byte "vault_wallet"
+callsub getglobalvalue_0
+byte ""
+==
+&&
+assert
+byte "vault_name"
+txna ApplicationArgs 0
+app_global_put
+byte "vault_wallet"
+global CurrentApplicationAddress
+app_global_put
+byte "company_id"
+load 0
+app_global_put
+byte "company_wallet"
+load 1
+app_global_put
+byte "verified_by_company"
+int 0
+app_global_put
+byte "coins_id"
+int 0
+app_global_put
+int 1
+return
+
+// app_call_company_bind_vault
+appcallcompanybindvault_2:
+store 12
+store 11
+store 10
+byte "str:bind_vault"
+store 13
+itxn_begin
+int appl
+itxn_field TypeEnum
+load 10
+itxn_field ApplicationID
+int NoOp
+itxn_field OnCompletion
+load 12
+itxn_field Accounts
+byte "bind_vault"
+itxn_field ApplicationArgs
+load 11
+itxn_field Applications
+itxn_submit
+retsub
+
+// let_company_bind_vault
+letcompanybindvault_3:
+global GroupSize
+int 1
+==
+txn GroupIndex
+int 0
+==
+&&
+assert
+int 0
+store 9
+letcompanybindvault_3_l1:
+load 9
+int 1
+<
+bz letcompanybindvault_3_l3
+load 9
+gtxns RekeyTo
+global ZeroAddress
+==
+assert
+load 9
+int 1
++
+store 9
+b letcompanybindvault_3_l1
+letcompanybindvault_3_l3:
+byte "company_id"
+app_global_get
+store 6
+global CurrentApplicationID
+store 7
+global CurrentApplicationAddress
+store 8
+byte "verified_by_company"
+app_global_get
+int 0
+==
+txna Applications 0
+load 6
+==
+&&
+txn NumAppArgs
+int 1
+==
+&&
+assert
+load 6
+load 7
+load 8
+callsub appcallcompanybindvault_2
+byte "verified_by_company"
+int 1
+app_global_put
+int 1
+return

@@ -25,18 +25,6 @@ def event(
     )
 
 
-# def check_rekey_zero(
-#     num_transactions: int,
-# ):
-#     return Assert(
-#         And(
-#             *[
-#                 Gtxn[i].rekey_to() == Global.zero_address()
-#                 for i in range(num_transactions)
-#             ]
-#         )
-#     )
-
 def check_rekey_zero(
     num_transactions,
 ):
