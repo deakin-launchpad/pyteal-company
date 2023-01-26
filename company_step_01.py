@@ -190,9 +190,9 @@ def clear():
 
 
 with open('company_step_01.teal', 'w') as f:
-    compiled = compileTeal(approval(), Mode.Application, version=5)
+    compiled = compileTeal(approval(), Mode.Application, version=MAX_PROGRAM_VERSION)
     f.write(compiled)
 
 with open("company_step_01_clear.teal", "w") as f:
-    compiled = compileTeal(clear(), Mode.Application, version=5)
+    compiled = compileTeal(clear(), Mode.Application, version=MAX_PROGRAM_VERSION)
     f.write(compiled)
