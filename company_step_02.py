@@ -7,18 +7,20 @@ def approval():
 
     # company key information
     company_name_key = Bytes("company_name")  # byteslice
-    minted_indicator_key = Bytes("minted")  # uint64
-    shared_indicator_key = Bytes("shared")  # uint64
+    company_wallet_key = Bytes("company_wallet")  # byteslice
     coins_key = Bytes("coins_id")  # uint64
     shares_key = Bytes("shares_id")  # uint64
-    founder_key = Bytes("founderX")  # uint64
+    founder_key = Bytes("founder")  # byteslice
     number_of_founders_key = Bytes("number_of_founder")  # uint64
+    vault_id_key = Bytes("vault_id")  # uint64
+    vault_wallet_key = Bytes("vault_wallet")  # byteslices
 
     # operation
     op_mint_coins = Bytes("mint_coins")
     op_mint_shares = Bytes("mint_shares")
     op_send_coins = Bytes("send_coins")
     op_distribute_shares = Bytes("distribute_shares")
+    op_bind_vault = Bytes("bind_vault")
 
     # Exp
     sender = Bytes("sender")
@@ -65,10 +67,12 @@ def approval():
                 Txn.application_args.length() == Int(1)
             ),
             App.globalPut(company_name_key, Txn.application_args[0]),
-            App.globalPut(minted_indicator_key, Int(0)),
-            App.globalPut(shared_indicator_key, Int(0)),
+            App.globalPut(company_wallet_key,
+                          Global.current_application_address()),
             App.globalPut(coins_key, Int(0)),
             App.globalPut(shares_key, Int(0)),
+            App.globalPut(vault_id_key, Int(0)),
+            App.globalPut(vault_wallet_key, Bytes("")),
             For(i.store(Int(1)), i.load() < (Txn.accounts.length() + Int(1)), i.store(i.load() + Int(1))).Do(
                 App.globalPut(Concat(founder_key, convert_uint_to_bytes(i.load())),
                               Txn.accounts[(i.load())])
@@ -125,18 +129,18 @@ def approval():
             Assert(
                 And(
                     # make sure the company has not created any crypto
-                    App.globalGet(minted_indicator_key) == Int(0),
+                    App.globalGet(coins_key) == Int(0),
+                    # make sure that the company has a vault and the reserve account of the coin is the vault account
+                    App.globalGet(vault_wallet_key) == Txn.accounts[1],
                     # operation, coins name, coins unit name, coins amount including decimal numbers, coins decimal, default frozen
                     Txn.application_args.length() == Int(6),
                 )
             ),
             # mint coins
             create_tokens(Txn.application_args[1], Txn.application_args[2], Btoi(
-                Txn.application_args[3]), Btoi(Txn.application_args[4]), Btoi(Txn.application_args[5]), Int(1)),
+                Txn.application_args[3]), Btoi(Txn.application_args[4]), Btoi(Txn.application_args[5]), Int(0)),
             # coins id
             App.globalPut(coins_key, (InnerTxn.created_asset_id())),
-            # coins minted
-            App.globalPut(minted_indicator_key, Int(1)),
             Approve(),
         )
 
@@ -153,7 +157,7 @@ def approval():
             Assert(
                 And(
                     # make sure the company has not created shares
-                    App.globalGet(shared_indicator_key) == Int(0),
+                    App.globalGet(shares_key) == Int(0),
                     # operation, company name, shares unit name, shares amount including decimal numbers, shares decimal, default frozen
                     Txn.application_args.length() == Int(6),
                 )
@@ -163,8 +167,6 @@ def approval():
                 Txn.application_args[3]), Btoi(Txn.application_args[4]), Btoi(Txn.application_args[5]), Int(0)),
             # shares id
             App.globalPut(shares_key, InnerTxn.created_asset_id()),
-            # shares minted
-            App.globalPut(shared_indicator_key, Int(1)),
             Approve(),
         )
 
@@ -240,7 +242,7 @@ def approval():
             Assert(
                 And(
                     # make sure the company has created shares
-                    App.globalGet(shared_indicator_key) == Int(1),
+                    shares_id.load() != Int(0),
                     # make sure the transfered asset id equals to the shares ID
                     Txn.assets[0] == shares_id.load(),
                     # make sure the total distribution amount equals to shares amount
@@ -249,10 +251,19 @@ def approval():
                     Txn.application_args.length() == founders_number.load() + Int(1),
                 )
             ),
+            # Check founder addresses in Txn accounts respectively
+            For(i.store(Int(1)), i.load() <= founders_number.load(), i.store(i.load() + Int(1))).Do(
+                Assert(
+                    Txn.accounts[i.load()] == App.globalGet(
+                        Concat(founder_key, convert_uint_to_bytes(i.load())))
+                )
+            ),
             # Check Optin status of each founder
             For(i.store(Int(1)), i.load() <= founders_number.load(), i.store(i.load() + Int(1))).Do(
-                Assert(check_assets_holding(receiver, App.globalGet(
-                    Concat(founder_key, convert_uint_to_bytes(i.load()))), shares_id.load())),
+                Assert(
+                    check_assets_holding(receiver, App.globalGet(
+                        Concat(founder_key, convert_uint_to_bytes(i.load()))), shares_id.load())
+                )
             ),
             # send shares
             For(i.store(Int(1)), i.load() <= founders_number.load(), i.store(i.load() + Int(1))).Do(
@@ -262,8 +273,8 @@ def approval():
             Approve(),
         )
 
-  # Send to reserve account
-    @Subroutine(TealType.none)
+    # Send to reserve account
+    @ Subroutine(TealType.none)
     def send_coins():
         # Scratch variable to store coins id
         coins_id = ScratchVar(TealType.uint64)
@@ -287,7 +298,7 @@ def approval():
             Assert(
                 And(
                     # make sure the company has created coins
-                    App.globalGet(minted_indicator_key) == Int(1),
+                    coins_id.load() != Int(0),
                     # make sure the transfered asset id equals to the coins ID
                     Txn.assets[0] == coins_id.load(),
                     # make sure the company own enough coins
@@ -304,6 +315,43 @@ def approval():
             ),
             company_send_tokens(
                 coins_id.load(), coins_amount.load(), coins_receiver.load()),
+            Approve(),
+        )
+
+    # get global value of other applications
+    @Subroutine(TealType.anytype)
+    def get_global_value(appId, key):
+        app_global_value = App.globalGetEx(appId, key)
+        return Seq(
+            app_global_value,
+            Return(
+                app_global_value.value()
+            )
+        )
+
+    # bind with a vault app that is calling this operation
+    @Subroutine(TealType.none)
+    def bind_vault():
+        vault_id = ScratchVar(TealType.uint64)
+        vault_wallet = ScratchVar(TealType.bytes)
+        return Seq(
+            vault_id.store(Txn.applications[0]),
+            vault_wallet.store(Txn.accounts[1]),
+            Assert(
+                And(
+                    # make sure that the company has no vault
+                    App.globalGet(vault_id_key) == Int(0),
+                    App.globalGet(vault_wallet_key) == Bytes(""),
+                    # make sure that the foreign account is the correct vault wallet
+                    get_global_value(vault_id.load(), vault_wallet_key) == vault_wallet.load(),
+                    # make sure that the application is called by the vault
+                    vault_wallet.load() == Txn.sender(),
+                    # operation
+                    Txn.application_args.length() == Int(1),
+                ),
+            ),
+            App.globalPut(vault_id_key, vault_id.load()),
+            App.globalPut(vault_wallet_key, vault_wallet.load()),
             Approve(),
         )
 
@@ -330,6 +378,10 @@ def approval():
                     Txn.application_args[0] == op_distribute_shares,
                     distribute_shares(),
                 ],
+                [
+                    Txn.application_args[0] == op_bind_vault,
+                    bind_vault(),
+                ],
             ),
             Reject(),
         ),
@@ -342,9 +394,10 @@ def clear():
 
 with open('company_step_02.teal', 'w') as f:
     compiled = compileTeal(approval(), Mode.Application,
-                           version=MAX_TEAL_VERSION)
+                           version=MAX_PROGRAM_VERSION)
     f.write(compiled)
 
 with open("company_step_02_clear.teal", "w") as f:
-    compiled = compileTeal(clear(), Mode.Application, version=MAX_TEAL_VERSION)
+    compiled = compileTeal(clear(), Mode.Application,
+                           version=MAX_PROGRAM_VERSION)
     f.write(compiled)
