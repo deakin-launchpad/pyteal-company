@@ -73,7 +73,7 @@ int 0
 ==
 &&
 assert
-txna Applications 0
+txna Applications 1
 store 0
 txna Accounts 1
 store 1
@@ -182,7 +182,7 @@ byte "verified_by_company"
 app_global_get
 int 0
 ==
-txna Applications 0
+txna Applications 1
 load 6
 ==
 &&

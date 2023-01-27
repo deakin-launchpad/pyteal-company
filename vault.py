@@ -39,8 +39,8 @@ def approval():
                 group_size=Int(1),
                 group_index=Int(0),
             ),
-            # company id passed through foreign app id
-            company_id.store(Txn.applications[0]),
+            # company id passed through foreign app id, Txn.app[0] == Int(0) when initializ an application
+            company_id.store(Txn.applications[1]),
             # company wallet passed through Txn account
             company_wallet.store(Txn.accounts[1]),
             Assert(
@@ -108,7 +108,7 @@ def approval():
                     # make sure the vault has not been verified and accepted by the company
                     App.globalGet(verified_by_company_key) == Int(0),
                     # make sure the foreign app id equals to the company id
-                    Txn.applications[0] == company_id.load(),
+                    Txn.applications[1] == company_id.load(),
                     # operation
                     Txn.application_args.length() == Int(1),
                 ),

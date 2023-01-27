@@ -335,7 +335,7 @@ def approval():
         vault_id = ScratchVar(TealType.uint64)
         vault_wallet = ScratchVar(TealType.bytes)
         return Seq(
-            vault_id.store(Txn.applications[0]),
+            vault_id.store(Txn.applications[1]),
             vault_wallet.store(Txn.accounts[1]),
             Assert(
                 And(

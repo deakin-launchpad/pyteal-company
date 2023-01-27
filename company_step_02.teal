@@ -610,7 +610,7 @@ retsub
 
 // bind_vault
 bindvault_10:
-txna Applications 0
+txna Applications 1
 store 31
 txna Accounts 1
 store 32
