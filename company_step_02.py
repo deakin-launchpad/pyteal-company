@@ -18,9 +18,8 @@ def approval():
     # operation
     op_mint_coins = Bytes("mint_coins")
     op_mint_shares = Bytes("mint_shares")
-    op_send_coins = Bytes("send_coins")
+    op_deposit_coins = Bytes("deposit_coins")
     op_distribute_shares = Bytes("distribute_shares")
-    op_bind_vault = Bytes("bind_vault")
 
     # Exp
     sender = Bytes("sender")
@@ -73,6 +72,7 @@ def approval():
             App.globalPut(shares_key, Int(0)),
             App.globalPut(vault_id_key, Int(0)),
             App.globalPut(vault_wallet_key, Bytes("")),
+            # put founders' ID into global keys
             For(i.store(Int(1)), i.load() < (Txn.accounts.length() + Int(1)), i.store(i.load() + Int(1))).Do(
                 App.globalPut(Concat(founder_key, convert_uint_to_bytes(i.load())),
                               Txn.accounts[(i.load())])
@@ -80,7 +80,17 @@ def approval():
             App.globalPut(number_of_founders_key, (i.load() - Int(1))),
         )
 
-    # create assets (coins or shares)
+    # get global value of other applications
+    @Subroutine(TealType.anytype)
+    def get_global_value(appId, key):
+        app_global_value = App.globalGetEx(appId, key)
+        return Seq(
+            app_global_value,
+            Return(
+                app_global_value.value()
+            )
+        )
+
     @Subroutine(TealType.none)
     def create_tokens(asset_name, asset_unit_name, asset_total, asset_decimal, asset_default_frozen, asset_reserve_status):
         return Seq(
@@ -116,9 +126,37 @@ def approval():
             InnerTxnBuilder.Submit(),
         )
 
+    # connect to a vault and let it OptIn to the coins ID
+    @Subroutine(TealType.none)
+    def vault_connect_and_optIn_coins(vault_id, coins_id):
+        operation = ScratchVar(TealType.bytes)
+        return Seq(
+            operation.store(Bytes("connect_company_and_optIn_to_coins")),
+            InnerTxnBuilder.Begin(),
+            InnerTxnBuilder.SetFields(
+                {
+                    TxnField.type_enum: TxnType.ApplicationCall,
+                    TxnField.application_id: vault_id,
+                    TxnField.on_completion: OnComplete.NoOp,
+                    TxnField.application_args: [operation.load()],
+                    TxnField.assets: [coins_id],
+                }
+            ),
+            InnerTxnBuilder.Submit(),
+        )
+
     # one-time function create coins and reserve the coins
     @Subroutine(TealType.none)
     def mint_coins():
+        vault_id = ScratchVar(TealType.uint64)
+        vault_wallet = ScratchVar(TealType.bytes)
+        coins_id = ScratchVar(TealType.uint64)
+        coins_name = ScratchVar(TealType.bytes)
+        coins_unit_name = ScratchVar(TealType.bytes)
+        coins_amount = ScratchVar(TealType.uint64)
+        coins_decimal = ScratchVar(TealType.uint64)
+        coins_default_frozen = ScratchVar(TealType.uint64)
+        asset_reserve_status = ScratchVar(TealType.uint64)
         return Seq(
             # basic sanity checks
             program.check_self(
@@ -126,27 +164,52 @@ def approval():
                 group_index=Int(0),
             ),
             program.check_rekey_zero(Int(1)),
+            vault_id.store(Txn.applications[1]),
+            vault_wallet.store(Txn.accounts[1]),
+            coins_name.store(Txn.application_args[1]),
+            coins_unit_name.store(Txn.application_args[2]),
+            coins_amount.store(Btoi(Txn.application_args[3])),
+            coins_decimal.store(Btoi(Txn.application_args[4])),
+            coins_default_frozen.store(Btoi(Txn.application_args[5])),
+            asset_reserve_status.store(Int(1)),
             Assert(
                 And(
                     # make sure the company has not created any crypto
                     App.globalGet(coins_key) == Int(0),
-                    # make sure that the company has a vault and the reserve account of the coin is the vault account
-                    App.globalGet(vault_wallet_key) == Txn.accounts[1],
+                    # make sure that the company has no vault connected
+                    App.globalGet(vault_wallet_key) == Bytes(""),
+                    App.globalGet(vault_id_key) == Int(0),
+                    # make sure the vault wallet belongs to the vault id
+                    get_global_value(
+                        vault_id.load(), vault_wallet_key) == vault_wallet.load(),
                     # operation, coins name, coins unit name, coins amount including decimal numbers, coins decimal, default frozen
                     Txn.application_args.length() == Int(6),
                 )
             ),
             # mint coins
-            create_tokens(Txn.application_args[1], Txn.application_args[2], Btoi(
-                Txn.application_args[3]), Btoi(Txn.application_args[4]), Btoi(Txn.application_args[5]), Int(0)),
+            create_tokens(coins_name.load(), coins_unit_name.load(), coins_amount.load(
+            ), coins_decimal.load(), coins_default_frozen.load(), asset_reserve_status.load()),
             # coins id
-            App.globalPut(coins_key, (InnerTxn.created_asset_id())),
+            coins_id.store(InnerTxn.created_asset_id()),
+            # let the vault store and optin to the coins
+            vault_connect_and_optIn_coins(vault_id.load(), coins_id.load()),
+            # put coins, vault ID and vault address
+            App.globalPut(coins_key, coins_id.load()),
+            App.globalPut(vault_id_key, vault_id.load()),
+            App.globalPut(vault_wallet_key, vault_wallet.load()),
             Approve(),
         )
 
     # one-time function create shares
     @Subroutine(TealType.none)
     def mint_shares():
+        shares_id = ScratchVar(TealType.uint64)
+        shares_name = ScratchVar(TealType.bytes)
+        shares_unit_name = ScratchVar(TealType.bytes)
+        shares_amount = ScratchVar(TealType.uint64)
+        shares_decimal = ScratchVar(TealType.uint64)
+        shares_default_frozen = ScratchVar(TealType.uint64)
+        asset_reserve_status = ScratchVar(TealType.uint64)
         return Seq(
             # basic sanity checks
             program.check_self(
@@ -154,6 +217,12 @@ def approval():
                 group_index=Int(0),
             ),
             program.check_rekey_zero(Int(1)),
+            shares_name.store(Txn.application_args[1]),
+            shares_unit_name.store(Txn.application_args[2]),
+            shares_amount.store(Btoi(Txn.application_args[3])),
+            shares_decimal.store(Btoi(Txn.application_args[4])),
+            shares_default_frozen.store(Btoi(Txn.application_args[5])),
+            asset_reserve_status.store(Int(0)),
             Assert(
                 And(
                     # make sure the company has not created shares
@@ -163,10 +232,11 @@ def approval():
                 )
             ),
             # mint shares
-            create_tokens(Txn.application_args[1], Txn.application_args[2], Btoi(
-                Txn.application_args[3]), Btoi(Txn.application_args[4]), Btoi(Txn.application_args[5]), Int(0)),
+            create_tokens(shares_name.load(), shares_unit_name.load(), shares_amount.load(
+            ), shares_decimal.load(), shares_default_frozen.load(), asset_reserve_status.load()),
             # shares id
-            App.globalPut(shares_key, InnerTxn.created_asset_id()),
+            shares_id.store(InnerTxn.created_asset_id()),
+            App.globalPut(shares_key, shares_id.load()),
             Approve(),
         )
 
@@ -175,7 +245,6 @@ def approval():
     def company_send_tokens(asset_id, amount, receiver):
         return Seq(
             InnerTxnBuilder.Begin(),
-            # create an asset that needs a reserve account
             InnerTxnBuilder.SetFields(
                 {
                     TxnField.type_enum: TxnType.AssetTransfer,
@@ -185,10 +254,9 @@ def approval():
                 }
             ),
             InnerTxnBuilder.Submit(),
-
         )
 
-    # check assets holding information
+    # check assets holding information, return asset amount if the role is a sender but optIn status if the rols is a reciever
     @Subroutine(TealType.uint64)
     def check_assets_holding(role, accountAddr, asset_id):
         accountAssetBalance = AssetHolding.balance(accountAddr, asset_id)
@@ -226,7 +294,7 @@ def approval():
             ),
             program.check_rekey_zero(Txn.application_args.length()),
             # get the shares ID from the global key of shares
-            shares_id.store(App.globalGet(shares_key)),
+            shares_id.store(Txn.assets[0]),
             # get the total number of shares that is held by the company
             shares_total.store(check_assets_holding(
                 sender, Global.current_application_address(), shares_id.load())),
@@ -241,10 +309,8 @@ def approval():
             ),
             Assert(
                 And(
-                    # make sure the company has created shares
-                    shares_id.load() != Int(0),
                     # make sure the transfered asset id equals to the shares ID
-                    Txn.assets[0] == shares_id.load(),
+                    shares_id.load() == App.globalGet(shares_key),
                     # make sure the total distribution amount equals to shares amount
                     shares_total.load() == distribution_total.load(),
                     # operation, distributions for founder1,2,3...,N
@@ -273,85 +339,34 @@ def approval():
             Approve(),
         )
 
-    # Send to reserve account
+    # Send coins to vault wallet
     @ Subroutine(TealType.none)
-    def send_coins():
-        # Scratch variable to store coins id
-        coins_id = ScratchVar(TealType.uint64)
-        # Scratch variable to store coins amount
-        coins_amount = ScratchVar(TealType.uint64)
-        # Scratch variable to represent receiver
-        coins_receiver = ScratchVar(TealType.bytes)
-        return Seq(
-            # basic sanity checks
-            program.check_self(
-                group_size=Int(1),
-                group_index=Int(0),
-            ),
-            program.check_rekey_zero(Int(1)),
-            # get asset ID of coins
-            coins_id.store(App.globalGet(coins_key)),
-            # get asset number to send
-            coins_amount.store(Btoi(Txn.application_args[1])),
-            # get receiver address
-            coins_receiver.store(Txn.accounts[1]),
-            Assert(
-                And(
-                    # make sure the company has created coins
-                    coins_id.load() != Int(0),
-                    # make sure the transfered asset id equals to the coins ID
-                    Txn.assets[0] == coins_id.load(),
-                    # make sure the company own enough coins
-                    check_assets_holding(sender, Global.current_application_address(
-                    ), coins_id.load()) >= coins_amount.load(),
-                    # check optin of receiver
-                    check_assets_holding(
-                        receiver, coins_receiver.load(), coins_id.load()),
-                    # operation, amount of coins
-                    Txn.application_args.length() == Int(2),
-                    # application call account, receiver account
-                    Txn.accounts.length() == Int(2),
-                )
-            ),
-            company_send_tokens(
-                coins_id.load(), coins_amount.load(), coins_receiver.load()),
-            Approve(),
-        )
-
-    # get global value of other applications
-    @Subroutine(TealType.anytype)
-    def get_global_value(appId, key):
-        app_global_value = App.globalGetEx(appId, key)
-        return Seq(
-            app_global_value,
-            Return(
-                app_global_value.value()
-            )
-        )
-
-    # bind with a vault app that is calling this operation
-    @Subroutine(TealType.none)
-    def bind_vault():
-        vault_id = ScratchVar(TealType.uint64)
+    def deposit_coins():
         vault_wallet = ScratchVar(TealType.bytes)
+        coins_id = ScratchVar(TealType.uint64)
+        coins_amount = ScratchVar(TealType.uint64)
         return Seq(
-            vault_id.store(Txn.applications[1]),
             vault_wallet.store(Txn.accounts[1]),
+            coins_id.store(Txn.assets[0]),
+            coins_amount.store(check_assets_holding(
+                sender, Global.current_application_address(), coins_id.load())),
             Assert(
                 And(
-                    # make sure that the company has no vault
-                    App.globalGet(vault_id_key) == Int(0),
-                    App.globalGet(vault_wallet_key) == Bytes(""),
-                    # make sure that the foreign account is the correct vault wallet
-                    get_global_value(vault_id.load(), vault_wallet_key) == vault_wallet.load(),
-                    # make sure that the application is called by the vault
-                    vault_wallet.load() == Txn.sender(),
+                    # check the coins ID
+                    App.globalGet(coins_key) == coins_id.load(),
+                    # check vault wallet
+                    App.globalGet(vault_wallet_key) == vault_wallet.load(),
+                    # check optin status of the vault
+                    check_assets_holding(
+                        receiver, vault_wallet.load(), coins_id.load()),
+                    # coins_amount cannot be 0
+                    coins_amount.load() >= Int(0),
                     # operation
                     Txn.application_args.length() == Int(1),
                 ),
             ),
-            App.globalPut(vault_id_key, vault_id.load()),
-            App.globalPut(vault_wallet_key, vault_wallet.load()),
+            company_send_tokens(
+                coins_id.load(), coins_amount.load(), vault_wallet.load()),
             Approve(),
         )
 
@@ -371,16 +386,12 @@ def approval():
                     mint_shares(),
                 ],
                 [
-                    Txn.application_args[0] == op_send_coins,
-                    send_coins(),
+                    Txn.application_args[0] == op_deposit_coins,
+                    deposit_coins(),
                 ],
                 [
                     Txn.application_args[0] == op_distribute_shares,
                     distribute_shares(),
-                ],
-                [
-                    Txn.application_args[0] == op_bind_vault,
-                    bind_vault(),
                 ],
             ),
             Reject(),

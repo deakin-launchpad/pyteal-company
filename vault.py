@@ -12,87 +12,55 @@ def approval():
     vault_wallet_key = Bytes("vault_wallet")  # byteslice
     company_id_key = Bytes("company_id")  # uint64
     company_wallet_key = Bytes("company_wallet")  # byteslice
-    verified_by_company_key = Bytes("verified_by_company")  # uint64
     coins_key = Bytes("coins_id")  # uint64
 
     # operation
-    binding_request = Bytes("binding_request")
-
-    # get global value of other applications
-    @Subroutine(TealType.anytype)
-    def get_global_value(appId, key):
-        app_global_value = App.globalGetEx(appId, key)
-        return Seq(
-            app_global_value,
-            Return(
-                app_global_value.value()
-            )
-        )
+    coins_optin = Bytes("connect_company_and_optIn_to_coins")
 
     # initialize vault
     @Subroutine(TealType.none)
     def on_create():
-        company_id = ScratchVar(TealType.uint64)
-        company_wallet = ScratchVar(TealType.bytes)
         return Seq(
             program.check_self(
                 group_size=Int(1),
                 group_index=Int(0),
             ),
-            # company id passed through foreign app id, Txn.app[0] == Int(0) when initializ an application
-            company_id.store(Txn.applications[1]),
-            # company wallet passed through Txn account
-            company_wallet.store(Txn.accounts[1]),
             Assert(
-                And(
-                    # vault name
-                    Txn.application_args.length() == Int(1),
-                    # make sure the company wallet in Txn account equals to the company wallet retreived from the company app
-                    get_global_value(company_id.load(), company_wallet_key) == company_wallet.load(),
-                    # make sure the company app is not bound with any vault
-                    get_global_value(company_id.load(), vault_id_key) == Int(0),
-                    get_global_value(company_id.load(), vault_wallet_key) == Bytes(""),
-                ),
+                # vault name
+                Txn.application_args.length() == Int(1),
             ),
             App.globalPut(vault_name_key, Txn.application_args[0]),
             App.globalPut(vault_wallet_key,
                           Global.current_application_address()),
-            App.globalPut(company_id_key, company_id.load()),
-            App.globalPut(company_wallet_key, company_wallet.load()),
-            # waiting for a verification from the company
-            App.globalPut(verified_by_company_key, Int(0)),
-            # coins that will be transfered from the company
+            App.globalPut(company_id_key, Int(0)),
+            App.globalPut(company_wallet_key, Bytes("")),
             App.globalPut(coins_key, Int(0)),
             Approve(),
         )
 
-    # create assets (coins or shares)
+    # asset optIn
     @Subroutine(TealType.none)
-    def app_call_company_bind_vault(company_id, vault_id, vault_wallet):
-        operation = ScratchVar(TealType.bytes)
+    def optIn_assets(asset_id):
         return Seq(
-            operation.store(Bytes("str:bind_vault")),
             InnerTxnBuilder.Begin(),
-            # application call that binds company with the newly created vault
             InnerTxnBuilder.SetFields(
                 {
-                    TxnField.type_enum: TxnType.ApplicationCall,
-                    TxnField.application_id: company_id,
-                    TxnField.on_completion: OnComplete.NoOp,
-                    TxnField.accounts: [vault_wallet],
-                    TxnField.application_args: [Bytes("bind_vault")],
-                    TxnField.applications: [vault_id],
+                    TxnField.type_enum: TxnType.AssetTransfer,
+                    TxnField.xfer_asset: asset_id,
+                    TxnField.asset_receiver: Global.current_application_address(),
+                    TxnField.asset_amount: Int(0),
                 }
             ),
             InnerTxnBuilder.Submit(),
+
         )
 
-    # one-time function requst a verification from the company
+    # one-time function that let the vault connect to a company and optIn into the coins ID
     @Subroutine(TealType.none)
-    def let_company_bind_vault():
+    def accept_company_and_optIn_coins():
+        company_wallet = ScratchVar(TealType.bytes)
         company_id = ScratchVar(TealType.uint64)
-        vault_id = ScratchVar(TealType.uint64)
-        vault_wallet = ScratchVar(TealType.bytes)
+        coins_id = ScratchVar(TealType.uint64)
         return Seq(
             # basic sanity checks
             program.check_self(
@@ -100,24 +68,24 @@ def approval():
                 group_index=Int(0),
             ),
             program.check_rekey_zero(Int(1)),
-            company_id.store(App.globalGet(company_id_key)),
-            vault_id.store(Global.current_application_id()),
-            vault_wallet.store(Global.current_application_address()),
+            company_wallet.store(Txn.sender()),
+            company_id.store(Txn.applications[0]),
+            coins_id.store(Txn.assets[0]),
             Assert(
                 And(
-                    # make sure the vault has not been verified and accepted by the company
-                    App.globalGet(verified_by_company_key) == Int(0),
-                    # make sure the foreign app id equals to the company id
-                    Txn.applications[1] == company_id.load(),
+                    # make sure the vault has no connected with any company
+                    App.globalGet(company_id_key) == Int(0),
+                    App.globalGet(company_wallet_key) == Bytes(""),
+                    # Make sure the vault has not accepted any coins
+                    App.globalGet(coins_key) == Int(0),
                     # operation
                     Txn.application_args.length() == Int(1),
                 ),
             ),
-            # application call to let the company put vault key information
-            app_call_company_bind_vault(company_id.load(), vault_id.load(
-            ), vault_wallet.load()),
-            # indicates that the vault has been verified and accepted by a company
-            App.globalPut(verified_by_company_key, Int(1)),
+            App.globalPut(company_id_key, company_id.load()),
+            App.globalPut(company_wallet_key, company_wallet.load()),
+            optIn_assets(coins_id.load()),
+            App.globalPut(coins_key, coins_id.load()),
             Approve(),
         )
 
@@ -129,8 +97,8 @@ def approval():
         no_op=Seq(
             Cond(
                 [
-                    Txn.application_args[0] == binding_request,
-                    let_company_bind_vault(),
+                    Txn.application_args[0] == coins_optin,
+                    accept_company_and_optIn_coins(),
                 ],
             ),
             Reject(),
@@ -148,5 +116,6 @@ with open('vault.teal', 'w') as f:
     f.write(compiled)
 
 with open("vault_clear.teal", "w") as f:
-    compiled = compileTeal(clear(), Mode.Application, version=MAX_PROGRAM_VERSION)
+    compiled = compileTeal(clear(), Mode.Application,
+                           version=MAX_PROGRAM_VERSION)
     f.write(compiled)
