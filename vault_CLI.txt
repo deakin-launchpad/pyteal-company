@@ -1,0 +1,10 @@
+create vault: 
+goal app create --approval-prog vault.teal --clear-prog vault_clear.teal --creator creator_acc --app-arg 'str:vault_name' --global-byteslices 3 --global-ints 2 --local-byteslices 0 --local-ints 0
+
+get vault info:
+goal app info --app-id vault_id
+
+fund vault: 
+goal clerk send -f creator_addr -t vault_addr -a amount
+
+

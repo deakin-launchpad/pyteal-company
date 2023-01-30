@@ -1,0 +1,66 @@
+create company:
+
+goal app create --approval-prog company_step_02.teal --clear-prog company_step_02_clear.teal --creator creator_acc --app-account founder1_addr ... --app-account founderX_addr --app-arg 'str:company_name' --global-byteslices 3+numOfFounder --global-ints 4 --local-byteslices 0 --local-ints 0
+
+get company info:
+
+goal app info --app-id company_id
+
+fund company:
+
+goal clerk send -f creator_acc -t company_addr -a amount
+
+create coins:
+
+goal app call --app-id company_id -f creator_addr --app-account vault_wallet --foreign-app vault_id --app-arg 'str:mint_coins' --app-arg 'str:coins_name' --app-arg 'str:coins_uint_name' --app-arg 'int:amount to mint including decimal' --app-arg 'int:decimal' --app-arg 'int:default_frozen'
+
+deposit coins:
+
+goal app call --app-id company_id -f creator_addr --foreign-asset coins_id --app-account vault_addr --app-arg 'str:deposit_coins'
+
+create shares:
+goal app call --app-id company_id -f creator_addr --app-arg 'str:mint_shares' --app-arg 'str:compang_name' --app-arg 'str:shares_unit_name' --app-arg 'int:amount including decimal' --app-arg 'int:decimal' --app-arg 'default_frozen'
+
+distribute shares:
+# optin transaction
+goal asset optin \
+    -a founder1_addr \
+    --assetid shares_id \
+    -o assetOptinFounder1.tx
+
+# optin transaction
+goal asset optin \
+    -a founder2_addr \
+    --assetid shares_id \
+    -o assetOptinFounder2.tx
+
+...
+
+# main transaction
+goal app call \
+    --app-id company_id \
+    -f creator_addr \
+    --app-account founder1_addr \
+    --app-account founder2_addr \
+    --app-arg 'str:distribute_shares' \
+    --app-arg 'int:founder1_shares_amount' \
+    --app-arg 'int:founder2_shares_amount' \
+    --foreign-asset shares_id \
+    -o sharesDistribution.tx
+
+
+# group transactions
+cat assetOptinFounder1.tx assetOptinFounder2.tx sharesDistribution.tx > distribution-combined.tx
+goal clerk group -i distribution-combined.tx -o distribution-grouped.tx
+goal clerk split -i distribution-grouped.tx -o distribution-split.tx
+
+# sign individual transactions
+goal clerk sign -i distribution-split-0.tx -L founder1.lsig -o distribution-signed-0.tx
+goal clerk sign -i distribution-split-1.tx -L founder2.lsig -o distribution-signed-1.tx
+goal clerk sign -i distribution-split-2.tx -o distribution-signed-2.tx
+
+# re-combine individually signed transactions
+cat distribution-signed-0.tx distribution-signed-1.tx distribution-signed-2.tx > distribution-signed-final.tx
+
+# send transaction
+goal clerk rawsend -f distribution-signed-final.tx
