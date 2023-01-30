@@ -1,0 +1,2 @@
+logic signature compile:
+goal clerk compile assetOptinApproval.teal -o name_Of_lsig.lsig -s -a address(has private key accessed)
