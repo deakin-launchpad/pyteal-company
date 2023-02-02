@@ -128,7 +128,7 @@ b acceptcompanyandoptIncoins_2_l1
 acceptcompanyandoptIncoins_2_l3:
 txn Sender
 store 0
-txna Applications 0
+txna Applications 1
 store 1
 txna Assets 0
 store 2

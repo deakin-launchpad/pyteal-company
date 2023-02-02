@@ -140,6 +140,7 @@ def approval():
                     TxnField.on_completion: OnComplete.NoOp,
                     TxnField.application_args: [operation.load()],
                     TxnField.assets: [coins_id],
+                    TxnField.applications: [Global.current_application_id()],
                 }
             ),
             InnerTxnBuilder.Submit(),

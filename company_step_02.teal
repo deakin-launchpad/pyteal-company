@@ -242,6 +242,8 @@ load 27
 itxn_field ApplicationArgs
 load 26
 itxn_field Assets
+global CurrentApplicationID
+itxn_field Applications
 itxn_submit
 retsub
 

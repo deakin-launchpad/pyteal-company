@@ -69,7 +69,7 @@ def approval():
             ),
             program.check_rekey_zero(Int(1)),
             company_wallet.store(Txn.sender()),
-            company_id.store(Txn.applications[0]),
+            company_id.store(Txn.applications[1]),
             coins_id.store(Txn.assets[0]),
             Assert(
                 And(
