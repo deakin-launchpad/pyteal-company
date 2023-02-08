@@ -6,9 +6,6 @@ from pyteal_helpers import program
 
 
 def approval():
-    # company keys that would be retrieved
-    vault_id_key = Bytes("vault_id")
-
     # vault keys
     vault_name_key = Bytes("vault_name")  # byteslice
     vault_wallet_key = Bytes("vault_wallet")  # byteslice
