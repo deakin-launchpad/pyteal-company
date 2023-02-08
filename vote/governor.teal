@@ -1,0 +1,278 @@
+#pragma version 8
+txn ApplicationID
+int 0
+==
+bnz main_l14
+txn OnCompletion
+int DeleteApplication
+==
+bnz main_l13
+txn OnCompletion
+int UpdateApplication
+==
+bnz main_l12
+txn OnCompletion
+int OptIn
+==
+bnz main_l11
+txn OnCompletion
+int CloseOut
+==
+bnz main_l10
+txn OnCompletion
+int NoOp
+==
+bnz main_l7
+err
+main_l7:
+txna ApplicationArgs 0
+byte "vote"
+==
+bnz main_l9
+err
+main_l9:
+callsub voting_2
+int 0
+return
+main_l10:
+int 0
+return
+main_l11:
+int 0
+callsub optIntovote_1
+int 1
+return
+main_l12:
+int 0
+return
+main_l13:
+int 0
+return
+main_l14:
+callsub oncreate_0
+int 1
+return
+
+// on_create
+oncreate_0:
+global LatestTimestamp
+store 0
+int 0
+store 2
+txn NumAppArgs
+int 6
+>=
+assert
+byte "governor_token"
+txna Assets 0
+app_global_put
+byte "proposal"
+txna ApplicationArgs 0
+app_global_put
+byte "min_token_to_vote"
+txna ApplicationArgs 1
+btoi
+app_global_put
+byte "choose"
+txna ApplicationArgs 2
+btoi
+app_global_put
+byte "voting_end"
+txna ApplicationArgs 3
+btoi
+load 0
++
+app_global_put
+byte "voting_delay"
+txna ApplicationArgs 4
+btoi
+app_global_put
+int 5
+store 1
+oncreate_0_l1:
+load 1
+txn NumAppArgs
+<
+bz oncreate_0_l9
+load 2
+int 1
++
+store 2
+byte "option"
+load 2
+int 0
+==
+bnz oncreate_0_l8
+byte ""
+store 3
+load 2
+store 4
+oncreate_0_l4:
+load 4
+int 0
+>
+bnz oncreate_0_l7
+load 3
+oncreate_0_l6:
+concat
+byte ": "
+concat
+load 1
+txnas ApplicationArgs
+concat
+int 0
+app_global_put
+load 1
+int 1
++
+store 1
+b oncreate_0_l1
+oncreate_0_l7:
+load 4
+int 10
+%
+store 5
+byte "0123456789"
+load 5
+load 5
+int 1
++
+substring3
+load 3
+concat
+store 3
+load 4
+int 10
+/
+store 4
+b oncreate_0_l4
+oncreate_0_l8:
+byte "0"
+b oncreate_0_l6
+oncreate_0_l9:
+byte "total_number_of_options"
+load 2
+app_global_put
+retsub
+
+// optIn_to_vote
+optIntovote_1:
+store 6
+load 6
+byte "voted"
+int 0
+app_local_put
+retsub
+
+// voting
+voting_2:
+global GroupSize
+int 1
+==
+txn GroupIndex
+int 0
+==
+&&
+assert
+int 0
+store 13
+voting_2_l1:
+load 13
+int 1
+<
+bnz voting_2_l8
+byte "governor_token"
+app_global_get
+store 7
+byte "min_token_to_vote"
+app_global_get
+store 8
+byte "choose"
+app_global_get
+store 9
+txn Sender
+txna Assets 0
+asset_holding_get AssetBalance
+store 12
+store 11
+txn Sender
+int 0
+app_opted_in
+txna Assets 0
+load 7
+==
+&&
+load 11
+load 8
+>=
+&&
+txn Sender
+byte "voted"
+app_local_get
+int 0
+==
+&&
+txn NumAppArgs
+load 9
+int 1
++
+==
+&&
+assert
+int 1
+store 10
+voting_2_l3:
+load 10
+load 9
+<=
+bnz voting_2_l7
+int 1
+store 10
+voting_2_l5:
+load 10
+load 9
+<=
+bz voting_2_l9
+load 10
+txnas ApplicationArgs
+load 10
+txnas ApplicationArgs
+app_global_get
+int 1
++
+app_global_put
+load 10
+int 1
++
+store 10
+b voting_2_l5
+voting_2_l7:
+load 10
+txnas ApplicationArgs
+app_global_get
+int 0
+>=
+assert
+load 10
+int 1
++
+store 10
+b voting_2_l3
+voting_2_l8:
+load 13
+gtxns RekeyTo
+global ZeroAddress
+==
+assert
+load 13
+int 1
++
+store 13
+b voting_2_l1
+voting_2_l9:
+txn Sender
+byte "voted"
+int 1
+app_local_put
+int 1
+return
