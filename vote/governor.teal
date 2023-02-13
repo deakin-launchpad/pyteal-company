@@ -2,23 +2,23 @@
 txn ApplicationID
 int 0
 ==
-bnz main_l14
+bnz main_l17
 txn OnCompletion
 int DeleteApplication
 ==
-bnz main_l13
+bnz main_l16
 txn OnCompletion
 int UpdateApplication
 ==
-bnz main_l12
+bnz main_l15
 txn OnCompletion
 int OptIn
 ==
-bnz main_l11
+bnz main_l14
 txn OnCompletion
 int CloseOut
 ==
-bnz main_l10
+bnz main_l13
 txn OnCompletion
 int NoOp
 ==
@@ -28,27 +28,35 @@ main_l7:
 txna ApplicationArgs 0
 byte "vote"
 ==
-bnz main_l9
+bnz main_l12
+txna ApplicationArgs 0
+byte "reveal"
+==
+bnz main_l10
 err
-main_l9:
-callsub voting_2
-int 0
-return
 main_l10:
-int 0
-return
+callsub revealoutcome_3
 main_l11:
 int 0
-callsub optIntovote_1
-int 1
 return
 main_l12:
-int 0
-return
+callsub voting_2
+b main_l11
 main_l13:
 int 0
 return
 main_l14:
+int 0
+callsub optIntovote_1
+int 1
+return
+main_l15:
+int 0
+return
+main_l16:
+int 0
+return
+main_l17:
 callsub oncreate_0
 int 1
 return
@@ -153,6 +161,9 @@ oncreate_0_l9:
 byte "total_number_of_options"
 load 2
 app_global_put
+byte "winners_number"
+int 0
+app_global_put
 retsub
 
 // optIn_to_vote
@@ -175,9 +186,9 @@ int 0
 &&
 assert
 int 0
-store 13
+store 14
 voting_2_l1:
-load 13
+load 14
 int 1
 <
 bnz voting_2_l8
@@ -190,11 +201,14 @@ store 8
 byte "choose"
 app_global_get
 store 9
+byte "voting_end"
+app_global_get
+store 10
 txn Sender
 txna Assets 0
 asset_holding_get AssetBalance
+store 13
 store 12
-store 11
 txn Sender
 int 0
 app_opted_in
@@ -202,7 +216,11 @@ txna Assets 0
 load 7
 ==
 &&
-load 11
+global LatestTimestamp
+load 10
+<=
+&&
+load 12
 load 8
 >=
 &&
@@ -220,59 +238,260 @@ int 1
 &&
 assert
 int 1
-store 10
+store 11
 voting_2_l3:
-load 10
+load 11
 load 9
 <=
 bnz voting_2_l7
 int 1
-store 10
+store 11
 voting_2_l5:
-load 10
+load 11
 load 9
 <=
 bz voting_2_l9
-load 10
+load 11
 txnas ApplicationArgs
-load 10
+load 11
 txnas ApplicationArgs
 app_global_get
 int 1
 +
 app_global_put
-load 10
+load 11
 int 1
 +
-store 10
+store 11
 b voting_2_l5
 voting_2_l7:
-load 10
+load 11
 txnas ApplicationArgs
 app_global_get
 int 0
 >=
 assert
-load 10
+load 11
 int 1
 +
-store 10
+store 11
 b voting_2_l3
 voting_2_l8:
-load 13
+load 14
 gtxns RekeyTo
 global ZeroAddress
 ==
 assert
-load 13
+load 14
 int 1
 +
-store 13
+store 14
 b voting_2_l1
 voting_2_l9:
 txn Sender
 byte "voted"
 int 1
 app_local_put
+int 1
+return
+
+// reveal_outcome
+revealoutcome_3:
+global GroupSize
+int 1
+==
+txn GroupIndex
+int 0
+==
+&&
+assert
+int 0
+store 21
+revealoutcome_3_l1:
+load 21
+int 1
+<
+bnz revealoutcome_3_l24
+byte "voting_end"
+app_global_get
+store 15
+byte "total_number_of_options"
+app_global_get
+store 16
+int 0
+store 18
+int 0
+store 20
+global LatestTimestamp
+load 15
+>
+byte "winners_number"
+app_global_get
+int 0
+==
+&&
+txn NumAppArgs
+load 16
+int 1
++
+==
+&&
+assert
+int 1
+store 17
+revealoutcome_3_l3:
+load 17
+load 16
+<=
+bnz revealoutcome_3_l15
+int 1
+store 17
+revealoutcome_3_l5:
+load 17
+load 16
+<=
+bz revealoutcome_3_l25
+byte "option"
+load 17
+int 0
+==
+bnz revealoutcome_3_l14
+byte ""
+store 25
+load 17
+store 26
+revealoutcome_3_l8:
+load 26
+int 0
+>
+bnz revealoutcome_3_l13
+load 25
+revealoutcome_3_l10:
+concat
+byte ": "
+concat
+load 17
+txnas ApplicationArgs
+concat
+app_global_get
+store 19
+load 19
+load 18
+==
+bnz revealoutcome_3_l12
+revealoutcome_3_l11:
+load 17
+int 1
++
+store 17
+b revealoutcome_3_l5
+revealoutcome_3_l12:
+load 20
+int 1
++
+store 20
+b revealoutcome_3_l11
+revealoutcome_3_l13:
+load 26
+int 10
+%
+store 27
+byte "0123456789"
+load 27
+load 27
+int 1
++
+substring3
+load 25
+concat
+store 25
+load 26
+int 10
+/
+store 26
+b revealoutcome_3_l8
+revealoutcome_3_l14:
+byte "0"
+b revealoutcome_3_l10
+revealoutcome_3_l15:
+byte "option"
+load 17
+int 0
+==
+bnz revealoutcome_3_l23
+byte ""
+store 22
+load 17
+store 23
+revealoutcome_3_l17:
+load 23
+int 0
+>
+bnz revealoutcome_3_l22
+load 22
+revealoutcome_3_l19:
+concat
+byte ": "
+concat
+load 17
+txnas ApplicationArgs
+concat
+app_global_get
+store 19
+load 19
+int 0
+>=
+assert
+load 19
+load 18
+>
+bnz revealoutcome_3_l21
+revealoutcome_3_l20:
+load 17
+int 1
++
+store 17
+b revealoutcome_3_l3
+revealoutcome_3_l21:
+load 19
+store 18
+b revealoutcome_3_l20
+revealoutcome_3_l22:
+load 23
+int 10
+%
+store 24
+byte "0123456789"
+load 24
+load 24
+int 1
++
+substring3
+load 22
+concat
+store 22
+load 23
+int 10
+/
+store 23
+b revealoutcome_3_l17
+revealoutcome_3_l23:
+byte "0"
+b revealoutcome_3_l19
+revealoutcome_3_l24:
+load 21
+gtxns RekeyTo
+global ZeroAddress
+==
+assert
+load 21
+int 1
++
+store 21
+b revealoutcome_3_l1
+revealoutcome_3_l25:
+byte "winners_number"
+load 20
+app_global_put
 int 1
 return
