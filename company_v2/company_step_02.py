@@ -1,8 +1,8 @@
-from pyteal import *
-from pyteal.ast.bytes import Bytes
 import sys
 sys.path.insert(0, '..')
 from pyteal_helpers import program
+from pyteal import *
+from pyteal.ast.bytes import Bytes
 
 
 def approval():
@@ -14,6 +14,8 @@ def approval():
     shares_key = Bytes("shares_id")  # uint64
     founder_key = Bytes("founder")  # byteslice
     number_of_founders_key = Bytes("number_of_founder")  # uint64
+    unallocated_shares_key = Bytes("unallocated_shares")  # uint64
+    shares_total_key = Bytes("shares_total")  # uint64
     vault_id_key = Bytes("vault_id")  # uint64
     vault_wallet_key = Bytes("vault_wallet")  # byteslices
 
@@ -63,23 +65,42 @@ def approval():
     @Subroutine(TealType.none)
     def on_create():
         i = ScratchVar(TealType.uint64)
+        shares_total = ScratchVar(TealType.uint64)
         return Seq(
             Assert(
-                Txn.application_args.length() == Int(1)
+                # company name, amount of shares a founder will be holding..., unallocated shares
+                Txn.application_args.length() == Txn.accounts.length() + Int(2)
             ),
+            shares_total.store(Int(0)),
+            # commpany name
             App.globalPut(company_name_key, Txn.application_args[0]),
+            # company wallet
             App.globalPut(company_wallet_key,
                           Global.current_application_address()),
+            # company coins
             App.globalPut(coins_key, Int(0)),
+            # company shares
             App.globalPut(shares_key, Int(0)),
+            # company vault
             App.globalPut(vault_id_key, Int(0)),
+            # vault wallet
             App.globalPut(vault_wallet_key, Bytes("")),
-            # put founders' ID into global keys
-            For(i.store(Int(1)), i.load() < (Txn.accounts.length() + Int(1)), i.store(i.load() + Int(1))).Do(
-                App.globalPut(Concat(founder_key, convert_uint_to_bytes(i.load())),
-                              Txn.accounts[(i.load())])
+            # company founders holding shares
+            For(i.store(Int(1)), i.load() <= Txn.accounts.length(), i.store(i.load() + Int(1))).Do(
+                App.globalPut(Txn.accounts[(i.load())], Btoi(
+                    Txn.application_args[i.load()])),
+                shares_total.store(shares_total.load() + \
+                                   Btoi(Txn.application_args[i.load()])),
             ),
+            # number of founders
             App.globalPut(number_of_founders_key, (i.load() - Int(1))),
+            # unallocated shares
+            App.globalPut(unallocated_shares_key, Btoi(
+                Txn.application_args[i.load()])),
+            shares_total.store(shares_total.load() + \
+                               Btoi(Txn.application_args[i.load()])),
+            # total shares will be created
+            App.globalPut(shares_total_key, shares_total.load())
         )
 
     # get global value of other applications
@@ -222,16 +243,16 @@ def approval():
             program.check_rekey_zero(Int(1)),
             shares_name.store(Txn.application_args[1]),
             shares_unit_name.store(Txn.application_args[2]),
-            shares_amount.store(Btoi(Txn.application_args[3])),
-            shares_decimal.store(Btoi(Txn.application_args[4])),
-            shares_default_frozen.store(Btoi(Txn.application_args[5])),
+            shares_amount.store(App.globalGet(shares_total_key)),
+            shares_decimal.store(Btoi(Txn.application_args[3])),
+            shares_default_frozen.store(Btoi(Txn.application_args[4])),
             asset_reserve_status.store(Int(0)),
             Assert(
                 And(
                     # make sure the company has not created shares
                     App.globalGet(shares_key) == Int(0),
-                    # operation, company name, shares unit name, shares amount including decimal numbers, shares decimal, default frozen
-                    Txn.application_args.length() == Int(6),
+                    # operation, company name, shares unit name, shares decimal, default frozen
+                    Txn.application_args.length() == Int(5),
                 )
             ),
             # mint shares
@@ -274,70 +295,56 @@ def approval():
             )
         )
 
-    # one-time function distribute shares
+    # one-time function distribute shares to founders respectively
     @Subroutine(TealType.none)
     def distribute_shares():
-        # store the number of founders
         founders_number = ScratchVar(TealType.uint64)
-        # store the ID of shares
         shares_id = ScratchVar(TealType.uint64)
-        # store the total number of shares
         shares_total = ScratchVar(TealType.uint64)
-        # store the total number of distributions
-        distribution_total = ScratchVar(TealType.uint64)
-        # for loop condition Int
+        available_shares = ScratchVar(TealType.uint64)
         i = ScratchVar(TealType.uint64)
         return Seq(
-            # basic sanity checks
             program.check_self(
-                # the number of group txn equals to optin transaction of each founders plus the main transaction sending shares
-                group_size=Txn.application_args.length(),
-                # the index of the main txn is the last txn to ensure that optin group txns happen in advance
-                group_index=Txn.application_args.length() - Int(1),
+                group_size=Int(1),
+                group_index=Int(0),
             ),
+            program.check_rekey_zero(Int(1)),
             program.check_rekey_zero(Txn.application_args.length()),
             # get the shares ID from the global key of shares
             shares_id.store(Txn.assets[0]),
             # get the total number of shares that is held by the company
-            shares_total.store(check_assets_holding(
+            available_shares.store(check_assets_holding(
                 sender, Global.current_application_address(), shares_id.load())),
+            # get the total shares recorded by the company
+            shares_total.store(App.globalGet(shares_total_key)),
             # get the number of founders from the global key
             founders_number.store(App.globalGet(number_of_founders_key)),
-            # initial the number of distriubting shares from 0
-            distribution_total.store(Int(0)),
-            # For loop that calculate the aggregation of distributing shares
-            For(i.store(Int(1)), i.load() <= founders_number.load(), i.store(i.load() + Int(1))).Do(
-                distribution_total.store(distribution_total.load() + Btoi(Txn.application_args[i.load()])
-                                         )
-            ),
             Assert(
                 And(
                     # make sure the transfered asset id equals to the shares ID
                     shares_id.load() == App.globalGet(shares_key),
-                    # make sure the total distribution amount equals to shares amount
-                    shares_total.load() == distribution_total.load(),
-                    # operation, distributions for founder1,2,3...,N
-                    Txn.application_args.length() == founders_number.load() + Int(1),
+                    # make sure the company created enough shares to distribute
+                    available_shares.load() == shares_total.load(),
+                    # operation
+                    Txn.application_args.length() == Int(1),
+                    # Txn.application_args.length() == founders_number.load() + Int(1),
+                    Txn.accounts.length() == founders_number.load(),
                 )
             ),
-            # Check founder addresses in Txn accounts respectively
+            # Check founder addresses and optin status
             For(i.store(Int(1)), i.load() <= founders_number.load(), i.store(i.load() + Int(1))).Do(
                 Assert(
-                    Txn.accounts[i.load()] == App.globalGet(
-                        Concat(founder_key, convert_uint_to_bytes(i.load())))
-                )
-            ),
-            # Check Optin status of each founder
-            For(i.store(Int(1)), i.load() <= founders_number.load(), i.store(i.load() + Int(1))).Do(
-                Assert(
-                    check_assets_holding(receiver, App.globalGet(
-                        Concat(founder_key, convert_uint_to_bytes(i.load()))), shares_id.load())
+                    And(
+                        App.globalGet(Txn.accounts[i.load()]) >= Int(0),
+                        check_assets_holding(
+                            receiver, Txn.accounts[i.load()], shares_id.load()),
+                    ),
                 )
             ),
             # send shares
             For(i.store(Int(1)), i.load() <= founders_number.load(), i.store(i.load() + Int(1))).Do(
-                company_send_tokens(shares_id.load(), Btoi(Txn.application_args[i.load()]), App.globalGet(
-                    Concat(founder_key, convert_uint_to_bytes(i.load()))))
+                company_send_tokens(shares_id.load(), App.globalGet(
+                    Txn.accounts[i.load()]), Txn.accounts[i.load()])
             ),
             Approve(),
         )
