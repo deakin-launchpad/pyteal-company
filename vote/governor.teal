@@ -30,12 +30,12 @@ byte "vote"
 ==
 bnz main_l12
 txna ApplicationArgs 0
-byte "reveal"
+byte "finalize"
 ==
 bnz main_l10
 err
 main_l10:
-callsub revealoutcome_3
+callsub finalizevoting_5
 main_l11:
 int 0
 return
@@ -160,9 +160,6 @@ b oncreate_0_l6
 oncreate_0_l9:
 byte "total_number_of_options"
 load 2
-app_global_put
-byte "winners_number"
-int 0
 app_global_put
 retsub
 
@@ -295,8 +292,43 @@ app_local_put
 int 1
 return
 
-// reveal_outcome
-revealoutcome_3:
+// get_global_value
+getglobalvalue_3:
+store 25
+store 24
+load 24
+load 25
+app_global_get_ex
+store 27
+store 26
+load 26
+retsub
+
+// activate_a_result_box
+activatearesultbox_4:
+store 30
+store 29
+store 28
+byte "update_result"
+store 31
+itxn_begin
+int appl
+itxn_field TypeEnum
+load 28
+itxn_field ApplicationID
+int NoOp
+itxn_field OnCompletion
+load 31
+itxn_field ApplicationArgs
+load 29
+itxn_field ApplicationArgs
+load 30
+itxn_field ApplicationArgs
+itxn_submit
+retsub
+
+// finalize_voting
+finalizevoting_5:
 global GroupSize
 int 1
 ==
@@ -306,12 +338,12 @@ int 0
 &&
 assert
 int 0
-store 21
-revealoutcome_3_l1:
-load 21
+store 23
+finalizevoting_5_l1:
+load 23
 int 1
 <
-bnz revealoutcome_3_l24
+bnz finalizevoting_5_l15
 byte "voting_end"
 app_global_get
 store 15
@@ -322,11 +354,16 @@ int 0
 store 18
 int 0
 store 20
+byte ""
+store 21
+txna Applications 0
+store 22
 global LatestTimestamp
 load 15
 >
-byte "winners_number"
-app_global_get
+load 22
+byte "activated"
+callsub getglobalvalue_3
 int 0
 ==
 &&
@@ -339,103 +376,60 @@ int 1
 assert
 int 1
 store 17
-revealoutcome_3_l3:
+finalizevoting_5_l3:
 load 17
 load 16
 <=
-bnz revealoutcome_3_l15
+bnz finalizevoting_5_l12
 int 1
 store 17
-revealoutcome_3_l5:
+finalizevoting_5_l5:
 load 17
 load 16
 <=
-bz revealoutcome_3_l25
-byte "option"
-load 17
-int 0
+bnz finalizevoting_5_l9
+load 20
+int 1
 ==
-bnz revealoutcome_3_l14
-byte ""
-store 25
-load 17
-store 26
-revealoutcome_3_l8:
-load 26
+bnz finalizevoting_5_l8
+load 22
 int 0
->
-bnz revealoutcome_3_l13
-load 25
-revealoutcome_3_l10:
-concat
-byte ": "
-concat
+byte "invalid"
+callsub activatearesultbox_4
+b finalizevoting_5_l16
+finalizevoting_5_l8:
+load 22
+int 1
+load 21
+callsub activatearesultbox_4
+b finalizevoting_5_l16
+finalizevoting_5_l9:
 load 17
 txnas ApplicationArgs
-concat
 app_global_get
 store 19
 load 19
 load 18
 ==
-bnz revealoutcome_3_l12
-revealoutcome_3_l11:
+bnz finalizevoting_5_l11
+finalizevoting_5_l10:
 load 17
 int 1
 +
 store 17
-b revealoutcome_3_l5
-revealoutcome_3_l12:
+b finalizevoting_5_l5
+finalizevoting_5_l11:
 load 20
 int 1
 +
 store 20
-b revealoutcome_3_l11
-revealoutcome_3_l13:
-load 26
-int 10
-%
-store 27
-byte "0123456789"
-load 27
-load 27
-int 1
-+
-substring3
-load 25
-concat
-store 25
-load 26
-int 10
-/
-store 26
-b revealoutcome_3_l8
-revealoutcome_3_l14:
-byte "0"
-b revealoutcome_3_l10
-revealoutcome_3_l15:
-byte "option"
-load 17
-int 0
-==
-bnz revealoutcome_3_l23
-byte ""
-store 22
-load 17
-store 23
-revealoutcome_3_l17:
-load 23
-int 0
->
-bnz revealoutcome_3_l22
-load 22
-revealoutcome_3_l19:
-concat
-byte ": "
-concat
 load 17
 txnas ApplicationArgs
-concat
+store 21
+b finalizevoting_5_l10
+finalizevoting_5_l12:
+load 17
+txnas ApplicationArgs
 app_global_get
 store 19
 load 19
@@ -445,53 +439,28 @@ assert
 load 19
 load 18
 >
-bnz revealoutcome_3_l21
-revealoutcome_3_l20:
+bnz finalizevoting_5_l14
+finalizevoting_5_l13:
 load 17
 int 1
 +
 store 17
-b revealoutcome_3_l3
-revealoutcome_3_l21:
+b finalizevoting_5_l3
+finalizevoting_5_l14:
 load 19
 store 18
-b revealoutcome_3_l20
-revealoutcome_3_l22:
+b finalizevoting_5_l13
+finalizevoting_5_l15:
 load 23
-int 10
-%
-store 24
-byte "0123456789"
-load 24
-load 24
-int 1
-+
-substring3
-load 22
-concat
-store 22
-load 23
-int 10
-/
-store 23
-b revealoutcome_3_l17
-revealoutcome_3_l23:
-byte "0"
-b revealoutcome_3_l19
-revealoutcome_3_l24:
-load 21
 gtxns RekeyTo
 global ZeroAddress
 ==
 assert
-load 21
+load 23
 int 1
 +
-store 21
-b revealoutcome_3_l1
-revealoutcome_3_l25:
-byte "winners_number"
-load 20
-app_global_put
+store 23
+b finalizevoting_5_l1
+finalizevoting_5_l16:
 int 1
 return

@@ -17,16 +17,18 @@ def approval():
     voting_delay_key = Bytes("voting_delay")  # uint64
     option_key = Bytes("option")  # uint64
     total_number_of_options_key = Bytes("total_number_of_options")  # uint64
-    number_of_winner_key = Bytes("winners_number")  # uint64
+    # number_of_winner_key = Bytes("winners_number")  # uint64
     voted_key = Bytes("voted")  # uint64
-    # number_of_votes_key = Bytes("number_of_votes") # uint64
+
+    # box key information
+    activated_by_voting = Bytes("activated") # uint64
 
     # operation
     vote = Bytes("vote")
-    reveal = Bytes("reveal")
-    # Exp
-    # sender = Bytes("sender")
-    # receiver = Bytes("receiver")
+    finalize = Bytes("finalize")
+
+    # expression
+    invalid = Bytes("invalid")
 
     # @Subroutine(TealType.bytes)
     def convert_uint_to_bytes(arg):
@@ -70,9 +72,7 @@ def approval():
             time_now.store(Global.latest_timestamp()),
             option_number.store(Int(0)),
             Assert(
-                And(
                     Txn.application_args.length() >= Int(6),
-                )
             ),
             App.globalPut(governorToken_key, Txn.assets[0]),
             App.globalPut(proposal_key, Txn.application_args[0]),
@@ -88,7 +88,6 @@ def approval():
                     option_number.load()), Bytes(": "), Txn.application_args[i.load()]), Int(0)),
             ),
             App.globalPut(total_number_of_options_key, option_number.load()),
-            App.globalPut(number_of_winner_key, Int(0)),
         )
 
     # optIn to initialize the voted value
@@ -155,15 +154,46 @@ def approval():
             Approve(),
         )
 
+    # get global value of other applications
+    @Subroutine(TealType.anytype)
+    def get_global_value(appId, key):
+        app_global_value = App.globalGetEx(appId, key)
+        return Seq(
+            app_global_value,
+            Return(
+                app_global_value.value()
+            )
+        )
+    
+    # innerTransaction to store the voting result
+    @Subroutine(TealType.none)
+    def activate_a_result_box(box_id, status, selected_idea):
+        operation = ScratchVar(TealType.bytes)
+        return Seq(
+            operation.store(Bytes("update_result")),
+            InnerTxnBuilder.Begin(),
+            InnerTxnBuilder.SetFields(
+                {
+                    TxnField.type_enum: TxnType.ApplicationCall,
+                    TxnField.application_id: box_id,
+                    TxnField.on_completion: OnComplete.NoOp,
+                    TxnField.application_args: [operation.load(), status, selected_idea],
+                }
+            ),
+            InnerTxnBuilder.Submit(),
+        )
+
     # finish voting and reveal the result
     @Subroutine(TealType.none)
-    def reveal_outcome():
+    def finalize_voting():
         time_limit = ScratchVar(TealType.uint64)
         total_options = ScratchVar(TealType.uint64)
         i = ScratchVar(TealType.uint64)
         highest_voted_number = ScratchVar(TealType.uint64)
         current_voted_number = ScratchVar(TealType.uint64)
         amount_of_highest_vote = ScratchVar(TealType.uint64)
+        highest_voted_idea = ScratchVar(TealType.bytes)
+        post_voting = ScratchVar(TealType.uint64)
         return Seq(
             # basic sanity checks
             program.check_self(
@@ -175,21 +205,21 @@ def approval():
             total_options.store(App.globalGet(total_number_of_options_key)),
             highest_voted_number.store(Int(0)),
             amount_of_highest_vote.store(Int(0)),
+            highest_voted_idea.store(Bytes("")),
+            post_voting.store(Txn.applications[0]),
             Assert(
                 And(
-                    # make sure the revealing happens after the time limit
+                    # make sure the finalizing happens after the time limit
                     Global.latest_timestamp() > time_limit.load(),
-                    # make sure the revealing can happen just once
-                    App.globalGet(number_of_winner_key) == Int(0),
+                    # make sure the box has not been taken by other votings
+                    get_global_value(post_voting.load(), activated_by_voting) == Int(0),
                     # operation, option1, ..., optionX
                     Txn.application_args.length() == total_options.load() + Int(1),
                 )
             ),
             # make sure options in arguments have the same content and order as public keys and get the highest voted number
             For(i.store(Int(1)), i.load() <= total_options.load(), i.store(i.load() + Int(1))).Do(
-                current_voted_number.store(App.globalGet(
-                    Concat(option_key, convert_uint_to_bytes(
-                        i.load()), Bytes(": "), Txn.application_args[i.load()]))),
+                current_voted_number.store(App.globalGet(Txn.application_args[i.load()])),
                 Assert(
                     current_voted_number.load() >= Int(0),
                 ),
@@ -197,27 +227,22 @@ def approval():
                     highest_voted_number.store(current_voted_number.load()),
                 )
             ),
-            # get the highest voted number
-            # For(i.store(Int(1)), i.load() <= total_options.load(), i.store(i.load() + Int(1))).Do(
-            #     current_voted_number.store(App.globalGet(
-            #         Concat(option_key, convert_uint_to_bytes(
-            #             i.load()), Bytes(": "), Txn.application_args[i.load()]))),
-            #     If(current_voted_number.load() > highest_voted_number.load()).Then(
-            #         highest_voted_number.store(current_voted_number.load()),
-            #     )
-            # ),
+            
             # get the amount of the highest voted number
             For(i.store(Int(1)), i.load() <= total_options.load(), i.store(i.load() + Int(1))).Do(
-                current_voted_number.store(App.globalGet(
-                    Concat(option_key, convert_uint_to_bytes(
-                        i.load()), Bytes(": "), Txn.application_args[i.load()]))),
+                current_voted_number.store(App.globalGet(Txn.application_args[i.load()])),
                 If(current_voted_number.load() == highest_voted_number.load()).Then(
                     amount_of_highest_vote.store(
                         amount_of_highest_vote.load() + Int(1)),
+                    highest_voted_idea.store(Txn.application_args[i.load()]),
                 )
             ),
-            # reveal the number of winners
-            App.globalPut(number_of_winner_key, amount_of_highest_vote.load()),
+            
+            # reveal the number of winners if there is a selection voted out, otherwise set the result invalid
+            If(amount_of_highest_vote.load() == Int(1))
+            .Then(
+                activate_a_result_box(post_voting.load(), Int(1), highest_voted_idea.load())
+            ).Else(activate_a_result_box(post_voting.load(), Int(0), invalid)),
             Approve(),
         )
 
@@ -234,8 +259,8 @@ def approval():
             Cond(
                 [Txn.application_args[0] == vote,
                  voting(),],
-                [Txn.application_args[0] == reveal,
-                 reveal_outcome(),]
+                [Txn.application_args[0] == finalize,
+                 finalize_voting(),]
             ),
             Reject(),
         ),
