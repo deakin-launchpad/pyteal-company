@@ -126,7 +126,7 @@ int 1
 store 0
 b oncreate_0_l1
 oncreate_0_l3:
-byte "number_of_founder"
+byte "number_of_founder(s)"
 load 0
 int 1
 -
@@ -467,7 +467,7 @@ store 36
 byte "shares_total"
 app_global_get
 store 35
-byte "number_of_founder"
+byte "number_of_founder(s)"
 app_global_get
 store 33
 load 34

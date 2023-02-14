@@ -12,8 +12,7 @@ def approval():
     company_wallet_key = Bytes("company_wallet")  # byteslice
     coins_key = Bytes("coins_id")  # uint64
     shares_key = Bytes("shares_id")  # uint64
-    founder_key = Bytes("founder")  # byteslice
-    number_of_founders_key = Bytes("number_of_founder")  # uint64
+    number_of_founders_key = Bytes("number_of_founder(s)")  # uint64
     unallocated_shares_key = Bytes("unallocated_shares")  # uint64
     shares_total_key = Bytes("shares_total")  # uint64
     vault_id_key = Bytes("vault_id")  # uint64
