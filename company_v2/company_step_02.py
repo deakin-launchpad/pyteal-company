@@ -1,8 +1,8 @@
 import sys
 sys.path.insert(0, '..')
-from pyteal_helpers import program
-from pyteal import *
 from pyteal.ast.bytes import Bytes
+from pyteal import *
+from pyteal_helpers import program
 
 
 def approval():
@@ -13,12 +13,15 @@ def approval():
     coins_key = Bytes("coins_id")  # uint64
     shares_key = Bytes("shares_id")  # uint64
     number_of_founders_key = Bytes("number_of_founder(s)")  # uint64
-    unallocated_shares_key = Bytes("unallocated_shares")  # uint64
+    # unallocated_shares_key = Bytes("unallocated_shares")  # uint64
     shares_total_key = Bytes("shares_total")  # uint64
+    founders_added = Bytes("founders_added")
+    # shares_remain_key = Bytes("remain_shares")  # uint64
     vault_id_key = Bytes("vault_id")  # uint64
     vault_wallet_key = Bytes("vault_wallet")  # byteslices
 
     # operation
+    op_add_founders = Bytes("add_founders")
     op_mint_coins = Bytes("mint_coins")
     op_mint_shares = Bytes("mint_shares")
     op_deposit_coins = Bytes("deposit_coins")
@@ -27,6 +30,7 @@ def approval():
     # Exp
     sender = Bytes("sender")
     receiver = Bytes("receiver")
+    founder = Bytes("founder")
 
     @Subroutine(TealType.bytes)
     def convert_uint_to_bytes(arg):
@@ -64,13 +68,11 @@ def approval():
     @Subroutine(TealType.none)
     def on_create():
         i = ScratchVar(TealType.uint64)
-        shares_total = ScratchVar(TealType.uint64)
         return Seq(
             Assert(
-                # company name, amount of shares a founder will be holding..., unallocated shares
-                Txn.application_args.length() == Txn.accounts.length() + Int(2)
+                # company name, total founders
+                Txn.application_args.length() == Int(2)
             ),
-            shares_total.store(Int(0)),
             # commpany name
             App.globalPut(company_name_key, Txn.application_args[0]),
             # company wallet
@@ -84,23 +86,46 @@ def approval():
             App.globalPut(vault_id_key, Int(0)),
             # vault wallet
             App.globalPut(vault_wallet_key, Bytes("")),
-            # company founders holding shares
-            For(i.store(Int(1)), i.load() <= Txn.accounts.length(), i.store(i.load() + Int(1))).Do(
-                App.globalPut(Txn.accounts[(i.load())], Btoi(
-                    Txn.application_args[i.load()])),
-                shares_total.store(shares_total.load() + \
-                                   Btoi(Txn.application_args[i.load()])),
-            ),
             # number of founders
-            App.globalPut(number_of_founders_key, (i.load() - Int(1))),
-            # unallocated shares
-            App.globalPut(unallocated_shares_key, Btoi(
-                Txn.application_args[i.load()])),
-            shares_total.store(shares_total.load() + \
-                               Btoi(Txn.application_args[i.load()])),
-            # total shares will be created
-            App.globalPut(shares_total_key, shares_total.load())
+            App.globalPut(number_of_founders_key,
+                          Btoi(Txn.application_args[1])),
+            # shares total
+            App.globalPut(shares_total_key, Int(0)),
+            # # unallocated shares
+            # App.globalPut(unallocated_shares_key, Int(0)),
+            # indicate the founders setting operation
+            App.globalPut(founders_added, Int(0)),
         )
+
+    # add founders
+    @ Subroutine(TealType.none)
+    def add_founders():
+        number_of_founders = ScratchVar(TealType.uint64)
+        i = ScratchVar(TealType.uint64)
+        return Seq(
+            number_of_founders.store(App.globalGet(number_of_founders_key)),
+            # basic sanity checks
+            program.check_self(
+                group_size=Int(1),
+                group_index=Int(0),
+            ),
+            program.check_rekey_zero(Int(1)),
+            Assert(
+                And(
+                    App.globalGet(founders_added) == Int(0),
+                    # operation, founder address1 ... founder addressX
+                    Txn.application_args.length() == number_of_founders.load() + Int(1),
+                ),
+            ),
+            For(i.store(Int(1)), i.load() < Txn.application_args.length(), i.store(i.load() + Int(1))).Do(
+                App.globalPut(convert_uint_to_bytes(i.load()),
+                              Txn.application_args[i.load()]),
+            ),
+            App.globalPut(founders_added, Int(1)),
+            Approve(),
+        )
+
+    # add more founders if the
 
     # get global value of other applications
     @Subroutine(TealType.anytype)
@@ -114,7 +139,7 @@ def approval():
         )
 
     @Subroutine(TealType.none)
-    def create_tokens(asset_name, asset_unit_name, asset_total, asset_decimal, asset_default_frozen, asset_reserve_status):
+    def create_tokens(asset_name, asset_unit_name, asset_total, asset_decimal, asset_reserve_status):
         return Seq(
             InnerTxnBuilder.Begin(),
             If(asset_reserve_status == Int(1))
@@ -127,7 +152,7 @@ def approval():
                         TxnField.config_asset_unit_name: asset_unit_name,
                         TxnField.config_asset_total: asset_total,
                         TxnField.config_asset_decimals: asset_decimal,
-                        TxnField.config_asset_default_frozen: asset_default_frozen,
+                        TxnField.config_asset_default_frozen: Int(0),
                         TxnField.config_asset_reserve: Txn.accounts[1],
                     }
                 ),
@@ -141,7 +166,7 @@ def approval():
                         TxnField.config_asset_unit_name: asset_unit_name,
                         TxnField.config_asset_total: asset_total,
                         TxnField.config_asset_decimals: asset_decimal,
-                        TxnField.config_asset_default_frozen: asset_default_frozen,
+                        TxnField.config_asset_default_frozen: Int(0),
                     }
                 ),
             ),
@@ -178,7 +203,6 @@ def approval():
         coins_unit_name = ScratchVar(TealType.bytes)
         coins_amount = ScratchVar(TealType.uint64)
         coins_decimal = ScratchVar(TealType.uint64)
-        coins_default_frozen = ScratchVar(TealType.uint64)
         asset_reserve_status = ScratchVar(TealType.uint64)
         return Seq(
             # basic sanity checks
@@ -193,7 +217,6 @@ def approval():
             coins_unit_name.store(Txn.application_args[2]),
             coins_amount.store(Btoi(Txn.application_args[3])),
             coins_decimal.store(Btoi(Txn.application_args[4])),
-            coins_default_frozen.store(Btoi(Txn.application_args[5])),
             asset_reserve_status.store(Int(1)),
             Assert(
                 And(
@@ -206,12 +229,12 @@ def approval():
                     get_global_value(
                         vault_id.load(), vault_wallet_key) == vault_wallet.load(),
                     # operation, coins name, coins unit name, coins amount including decimal numbers, coins decimal, default frozen
-                    Txn.application_args.length() == Int(6),
+                    Txn.application_args.length() == Int(5),
                 )
             ),
             # mint coins
             create_tokens(coins_name.load(), coins_unit_name.load(), coins_amount.load(
-            ), coins_decimal.load(), coins_default_frozen.load(), asset_reserve_status.load()),
+            ), coins_decimal.load(), asset_reserve_status.load()),
             # coins id
             coins_id.store(InnerTxn.created_asset_id()),
             # let the vault store and optin to the coins
@@ -231,7 +254,6 @@ def approval():
         shares_unit_name = ScratchVar(TealType.bytes)
         shares_amount = ScratchVar(TealType.uint64)
         shares_decimal = ScratchVar(TealType.uint64)
-        shares_default_frozen = ScratchVar(TealType.uint64)
         asset_reserve_status = ScratchVar(TealType.uint64)
         return Seq(
             # basic sanity checks
@@ -242,24 +264,25 @@ def approval():
             program.check_rekey_zero(Int(1)),
             shares_name.store(Txn.application_args[1]),
             shares_unit_name.store(Txn.application_args[2]),
-            shares_amount.store(App.globalGet(shares_total_key)),
-            shares_decimal.store(Btoi(Txn.application_args[3])),
-            shares_default_frozen.store(Btoi(Txn.application_args[4])),
+            shares_amount.store(Btoi(Txn.application_args[3])),
+            shares_decimal.store(Btoi(Txn.application_args[4])),
             asset_reserve_status.store(Int(0)),
             Assert(
                 And(
                     # make sure the company has not created shares
                     App.globalGet(shares_key) == Int(0),
-                    # operation, company name, shares unit name, shares decimal, default frozen
+                    # operation, company name, shares amount including decimal, shares unit name, shares decimal, default frozen
                     Txn.application_args.length() == Int(5),
                 )
             ),
             # mint shares
             create_tokens(shares_name.load(), shares_unit_name.load(), shares_amount.load(
-            ), shares_decimal.load(), shares_default_frozen.load(), asset_reserve_status.load()),
+            ), shares_decimal.load(), asset_reserve_status.load()),
             # shares id
             shares_id.store(InnerTxn.created_asset_id()),
             App.globalPut(shares_key, shares_id.load()),
+            # shares amount
+            App.globalPut(shares_total_key, shares_amount.load()),
             Approve(),
         )
 
@@ -287,7 +310,8 @@ def approval():
             accountAssetBalance,
             Return(
                 Cond(
-                    [role == Bytes("sender"), accountAssetBalance.value()],
+                    [Or(role == Bytes("sender"),
+                        role == Bytes("founder")), accountAssetBalance.value()],
                     [role == Bytes("receiver"),
                      accountAssetBalance.hasValue()],
                 )
@@ -297,7 +321,6 @@ def approval():
     # one-time function distribute shares to founders respectively
     @Subroutine(TealType.none)
     def distribute_shares():
-        founders_number = ScratchVar(TealType.uint64)
         shares_id = ScratchVar(TealType.uint64)
         shares_total = ScratchVar(TealType.uint64)
         available_shares = ScratchVar(TealType.uint64)
@@ -308,42 +331,40 @@ def approval():
                 group_index=Int(0),
             ),
             program.check_rekey_zero(Int(1)),
-            program.check_rekey_zero(Txn.application_args.length()),
+            shares_total.store(Int(0)),
             # get the shares ID from the global key of shares
             shares_id.store(Txn.assets[0]),
-            # get the total number of shares that is held by the company
+            # get the remain amount of shares that is held by the company
             available_shares.store(check_assets_holding(
                 sender, Global.current_application_address(), shares_id.load())),
-            # get the total shares recorded by the company
-            shares_total.store(App.globalGet(shares_total_key)),
-            # get the number of founders from the global key
-            founders_number.store(App.globalGet(number_of_founders_key)),
+            # get the total shares distributed to founders
+            For(i.store(Txn.accounts.length() + Int(1)), i.load() <= Txn.accounts.length() * Int(2), i.store(i.load()+Int(1))).Do(
+                shares_total.store(shares_total.load() + \
+                                   Btoi(Txn.application_args[i.load()]))
+            ),
             Assert(
                 And(
                     # make sure the transfered asset id equals to the shares ID
                     shares_id.load() == App.globalGet(shares_key),
                     # make sure the company created enough shares to distribute
-                    available_shares.load() == shares_total.load(),
-                    # operation
-                    Txn.application_args.length() == Int(1),
-                    # Txn.application_args.length() == founders_number.load() + Int(1),
-                    Txn.accounts.length() == founders_number.load(),
+                    available_shares.load() >= shares_total.load(),
+                    # operation, id of each founder, shares for each founder
+                    Txn.application_args.length() == (Txn.accounts.length() * Int(2)) + Int(1),
                 )
             ),
-            # Check founder addresses and optin status
-            For(i.store(Int(1)), i.load() <= founders_number.load(), i.store(i.load() + Int(1))).Do(
+            # make sure each founder has opted in but not received shares
+            For(i.store(Int(1)), i.load() <= Txn.accounts.length(), i.store(i.load() + Int(1))).Do(
                 Assert(
-                    And(
-                        App.globalGet(Txn.accounts[i.load()]) >= Int(0),
-                        check_assets_holding(
-                            receiver, Txn.accounts[i.load()], shares_id.load()),
-                    ),
+                    App.globalGet(
+                        Txn.application_args[i.load()]) == Txn.accounts[i.load()],
+                    check_assets_holding(
+                        founder, Txn.accounts[i.load()], shares_id.load()) == Int(0),
                 )
             ),
             # send shares
-            For(i.store(Int(1)), i.load() <= founders_number.load(), i.store(i.load() + Int(1))).Do(
-                company_send_tokens(shares_id.load(), App.globalGet(
-                    Txn.accounts[i.load()]), Txn.accounts[i.load()])
+            For(i.store(Int(1)), i.load() <= Txn.accounts.length(), i.store(i.load() + Int(1))).Do(
+                company_send_tokens(shares_id.load(), Btoi(Txn.application_args[i.load(
+                ) + Txn.accounts.length()]), Txn.accounts[i.load()])
             ),
             Approve(),
         )
@@ -386,6 +407,10 @@ def approval():
         ),
         no_op=Seq(
             Cond(
+                [
+                    Txn.application_args[0] == op_add_founders,
+                    add_founders(),
+                ],
                 [
                     Txn.application_args[0] == op_mint_coins,
                     mint_coins(),
