@@ -1,20 +1,23 @@
 create company: 
-goal app create --approval-prog company_step_02.teal --clear-prog company_step_02_clear.teal --creator creator_acc --app-account founder1_addr ... --app-account founderX_addr --app-arg 'str:company_name' --app-arg 'int:amount_of_shares_founder1' ... --app-arg 'int:amount_of_shares_founderX' --app-arg 'int:amount_of_unallocated_shares' --global-byteslices 3 --global-ints 6+numOfFounders --local-byteslices 0 --local-ints 0
+goal app create --approval-prog company_step_02.teal --clear-prog company_step_02_clear.teal --creator your_acc --app-arg 'str:company_name' --app-arg 'int:number_of_founders'  --global-byteslices 32 --global-ints 32 --local-byteslices 0 --local-ints 0
 
 get company info:
 goal app info --app-id company_id
 
-fund company
-goal clerk send -f creator_acc -t company_addr -a amount
+fund company: 
+goal clerk send -f your_acc -t company_addr -a amount
 
-create coins
-goal app call --app-id company_id -f creator_addr --app-account vault_wallet --foreign-app vault_id --app-arg 'str:mint_coins' --app-arg 'str:coins_name' --app-arg 'str:coins_uint_name' --app-arg 'int:amount to mint including decimal' --app-arg 'int:decimal' --app-arg 'int:default_frozen'
+add founders:
+goal app call --app-id company_id -f your_acc --app-arg 'str:add_founders' --app-arg 'addr:founder1_addr' ... --app-arg 'addr:founderX_addr' (up to 15)
 
-deposit coins
-goal app call --app-id company_id -f creator_addr --foreign-asset coins_id --app-account vault_addr --app-arg 'str:deposit_coins'
+create coins:
+goal app call --app-id company_id -f your_acc --app-account vault_wallet --foreign-app vault_id --app-arg 'str:mint_coins' --app-arg 'str:coins_name' --app-arg 'str:coins_uint_name' --app-arg 'int:amount to mint including decimal' --app-arg 'int:decimal'
+
+deposit coins:
+goal app call --app-id company_id -f your_acc --foreign-asset coins_id --app-account vault_addr --app-arg 'str:deposit_coins'
 
 create shares:
-goal app call --app-id company_id -f creator_addr --app-arg 'str:mint_shares' --app-arg 'str:compang_name' --app-arg 'str:shares_unit_name' --app-arg 'int:decimal' --app-arg 'int: default_frozen'
+goal app call --app-id company_id -f your_acc --app-arg 'str:mint_shares' --app-arg 'str:compang_name' --app-arg 'str:shares_unit_name' --app-arg 'int:amount to mint including decimal' --app-arg 'int:decimal'
 
 founders asset optin:
 goal asset optin -a founder_addr --assetid shares_id -o assetOptinFounder.tx
@@ -22,4 +25,4 @@ goal clerk sign -i assetOptinFounder.tx -L founder.lsig -o signedAssetOptin.tx
 goal clerk rawsend -f signedAssetOptin.tx
 
 distribute shares:
-goal app call --app-id company_id -f creator_addr --app-account founder1_addr ... --app-account founderX_addr --app-arg 'str:distribute_shares' --foreign-asset shares_id
+goal app call --app-id company_id -f your_acc --app-account founder1_addr ... --app-account founderX_addr --app-arg 'str:distribute_shares' --app-arg 'str:key_of_accounts[1]' ... --app-arg 'str:key_of_accounts[X]' --foreign-asset shares_id (X is up to 4)
