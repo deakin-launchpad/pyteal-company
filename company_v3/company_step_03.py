@@ -21,11 +21,12 @@ def approval():
     vault_wallet_key = Bytes("vault_wallet")  # byteslices
 
     # operation
-    op_add_founders = Bytes("add_founders")
-    op_mint_coins = Bytes("mint_coins")
-    op_mint_shares = Bytes("mint_shares")
-    op_deposit_coins = Bytes("deposit_coins")
-    op_distribute_shares = Bytes("distribute_shares")
+    op_on_create_add_founders = Bytes("add_founders")
+    op_on_create_mint_coins = Bytes("mint_coins")
+    op_on_create_mint_shares = Bytes("mint_shares")
+    op_on_create_deposit_coins = Bytes("deposit_coins")
+    op_on_create_distribute_shares = Bytes("distribute_shares")
+    op_post_create_distribute_shares = Bytes("distribute_remain_shares")
 
     # Exp
     sender = Bytes("sender")
@@ -67,7 +68,6 @@ def approval():
     # initialize company
     @Subroutine(TealType.none)
     def on_create():
-        i = ScratchVar(TealType.uint64)
         return Seq(
             Assert(
                 # company name, total founders
@@ -91,15 +91,13 @@ def approval():
                           Btoi(Txn.application_args[1])),
             # shares total
             App.globalPut(shares_total_key, Int(0)),
-            # # unallocated shares
-            # App.globalPut(unallocated_shares_key, Int(0)),
             # indicate the founders setting operation
             App.globalPut(founders_added, Int(0)),
         )
 
     # add founders
     @ Subroutine(TealType.none)
-    def add_founders():
+    def on_create_add_founders():
         number_of_founders = ScratchVar(TealType.uint64)
         i = ScratchVar(TealType.uint64)
         return Seq(
@@ -195,7 +193,7 @@ def approval():
 
     # one-time function create coins and reserve the coins
     @Subroutine(TealType.none)
-    def mint_coins():
+    def on_create_mint_coins():
         vault_id = ScratchVar(TealType.uint64)
         vault_wallet = ScratchVar(TealType.bytes)
         coins_id = ScratchVar(TealType.uint64)
@@ -248,7 +246,7 @@ def approval():
 
     # one-time function create shares
     @Subroutine(TealType.none)
-    def mint_shares():
+    def on_create_mint_shares():
         shares_id = ScratchVar(TealType.uint64)
         shares_name = ScratchVar(TealType.bytes)
         shares_unit_name = ScratchVar(TealType.bytes)
@@ -320,7 +318,7 @@ def approval():
 
     # one-time function distribute shares to founders respectively
     @Subroutine(TealType.none)
-    def distribute_shares():
+    def on_create_distribute_shares():
         shares_id = ScratchVar(TealType.uint64)
         shares_total = ScratchVar(TealType.uint64)
         available_shares = ScratchVar(TealType.uint64)
@@ -371,7 +369,7 @@ def approval():
 
     # Send coins to vault wallet
     @ Subroutine(TealType.none)
-    def deposit_coins():
+    def on_create_deposit_coins():
         vault_wallet = ScratchVar(TealType.bytes)
         coins_id = ScratchVar(TealType.uint64)
         coins_amount = ScratchVar(TealType.uint64)
@@ -400,7 +398,46 @@ def approval():
             Approve(),
         )
 
-    
+    # post create function distributing shares to other addresses
+    @Subroutine(TealType.none)
+    def post_create_distribute_shares():
+        receiver_addr = ScratchVar(TealType.bytes)
+        shares_id = ScratchVar(TealType.uint64)
+        shares_amount = ScratchVar(TealType.uint64)
+        available_shares = ScratchVar(TealType.uint64)
+        return Seq(
+            program.check_self(
+                group_size=Int(1),
+                group_index=Int(0),
+            ),
+            program.check_rekey_zero(Int(1)),
+            # get the receiver's address
+            receiver_addr.store(Txn.accounts[1]),
+            # get the distributing amount of shares
+            shares_amount.store(Btoi(Txn.application_args[1])),
+            # get the shares ID from the global key of shares
+            shares_id.store(Txn.assets[0]),
+            # get the remain amount of shares that is held by the company
+            available_shares.store(check_assets_holding(
+                sender, Global.current_application_address(), shares_id.load())),
+            Assert(
+                And(
+                    # make sure the transfered asset id equals to the shares ID
+                    shares_id.load() == App.globalGet(shares_key),
+                    # make sure the company created enough shares to distribute
+                    available_shares.load() >= shares_amount.load(),
+                    # make sure the receiver has opted in
+                    check_assets_holding(
+                        receiver, receiver_addr.load(), shares_id.load()),
+                    # operation, amount of shares
+                    Txn.application_args.length() == Int(2),
+                )
+            ),
+            # send shares
+            company_send_tokens(shares_id.load(), shares_amount.load(), receiver_addr.load()),
+            Approve(),
+        )
+
     return program.event(
         init=Seq(
             on_create(),
@@ -409,24 +446,28 @@ def approval():
         no_op=Seq(
             Cond(
                 [
-                    Txn.application_args[0] == op_add_founders,
-                    add_founders(),
+                    Txn.application_args[0] == op_on_create_add_founders,
+                    on_create_add_founders(),
                 ],
                 [
-                    Txn.application_args[0] == op_mint_coins,
-                    mint_coins(),
+                    Txn.application_args[0] == op_on_create_mint_coins,
+                    on_create_mint_coins(),
                 ],
                 [
-                    Txn.application_args[0] == op_mint_shares,
-                    mint_shares(),
+                    Txn.application_args[0] == op_on_create_mint_shares,
+                    on_create_mint_shares(),
                 ],
                 [
-                    Txn.application_args[0] == op_deposit_coins,
-                    deposit_coins(),
+                    Txn.application_args[0] == op_on_create_deposit_coins,
+                    on_create_deposit_coins(),
                 ],
                 [
-                    Txn.application_args[0] == op_distribute_shares,
-                    distribute_shares(),
+                    Txn.application_args[0] == op_on_create_distribute_shares,
+                    on_create_distribute_shares(),
+                ],
+                [
+                    Txn.application_args[0] == op_post_create_distribute_shares,
+                    post_create_distribute_shares(),
                 ],
             ),
             Reject(),
@@ -438,12 +479,12 @@ def clear():
     return Approve()
 
 
-with open('company_step_02.teal', 'w') as f:
+with open('company_step_03.teal', 'w') as f:
     compiled = compileTeal(approval(), Mode.Application,
                            version=MAX_PROGRAM_VERSION)
     f.write(compiled)
 
-with open("company_step_02_clear.teal", "w") as f:
+with open("company_step_03_clear.teal", "w") as f:
     compiled = compileTeal(clear(), Mode.Application,
                            version=MAX_PROGRAM_VERSION)
     f.write(compiled)
