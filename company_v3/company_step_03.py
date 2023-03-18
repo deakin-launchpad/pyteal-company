@@ -98,10 +98,12 @@ def approval():
     # add founders
     @ Subroutine(TealType.none)
     def on_create_add_founders():
-        number_of_founders = ScratchVar(TealType.uint64)
+        total_founders = ScratchVar(TealType.uint64)
+        added_founders = ScratchVar(TealType.uint64)
         i = ScratchVar(TealType.uint64)
         return Seq(
-            number_of_founders.store(App.globalGet(number_of_founders_key)),
+            total_founders.store(App.globalGet(number_of_founders_key)),
+            added_founders.store(App.globalGet(founders_added)),
             # basic sanity checks
             program.check_self(
                 group_size=Int(1),
@@ -110,20 +112,19 @@ def approval():
             program.check_rekey_zero(Int(1)),
             Assert(
                 And(
-                    App.globalGet(founders_added) == Int(0),
-                    # operation, founder address1 ... founder addressX
-                    Txn.application_args.length() == number_of_founders.load() + Int(1),
+                    (App.globalGet(founders_added) + Txn.application_args.length() - Int(1)) <= total_founders.load(),
+                    # operation, founder address1 ... founder addressX (up to 11)
+                    Txn.application_args.length() <= Int(11),
                 ),
             ),
-            For(i.store(Int(1)), i.load() < Txn.application_args.length(), i.store(i.load() + Int(1))).Do(
+            For(i.store(added_founders.load() + Int(1)), i.load() < (added_founders.load() + Txn.application_args.length()), i.store(i.load() + Int(1))).Do(
                 App.globalPut(convert_uint_to_bytes(i.load()),
-                              Txn.application_args[i.load()]),
+                              Txn.application_args[i.load() - added_founders.load()]),
             ),
-            App.globalPut(founders_added, Int(1)),
+            App.globalPut(founders_added, (Txn.application_args.length() + added_founders.load() - Int(1))),
             Approve(),
         )
 
-    # add more founders if the
 
     # get global value of other applications
     @Subroutine(TealType.anytype)
