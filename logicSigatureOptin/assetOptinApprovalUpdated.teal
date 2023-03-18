@@ -1,0 +1,27 @@
+#pragma version 5
+global GroupSize
+int 2
+==
+txn GroupIndex
+int 1
+==
+&&
+assert
+gtxn 0 Sender
+addr P2UWZURRK3UGAUFY5RFFX7AXFFEU5576KZKGM5U5FPRPIE6Y5CNMPAIL4E
+==
+txn TypeEnum
+int axfer
+==
+&&
+txn AssetReceiver
+txn Sender
+==
+&&
+txn AssetAmount
+int 0
+==
+&&
+assert
+int 1
+return
